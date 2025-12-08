@@ -27,6 +27,7 @@ dev = ["maturin", "pytest"]
 bindings = "pyo3"
 strip = true
 profile = "release"
+include = ["scraper_rs.pyi", "py.typed"]
 
 [dependency-groups]
 dev = [

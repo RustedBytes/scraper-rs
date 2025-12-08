@@ -12,15 +12,15 @@ html = """
 # 1) Object-oriented:
 doc = Document(html)
 
-print(doc)          # <Document len_html=...>
-print(doc.text)     # "First Second"
+print(doc)  # <Document len_html=...>
+print(doc.text)  # "First Second"
 
 items = doc.select(".item")
 for el in items:
-    print(el.tag)        # "div"
-    print(el.text)       # "First" / "Second"
+    print(el.tag)  # "div"
+    print(el.text)  # "First" / "Second"
     print(el.attr("data-id"))
-    print(el.attrs)      # full attribute dict
+    print(el.attrs)  # full attribute dict
     print(el.to_dict())  # handy for debugging / serialization
 
 first_link = doc.find("a[href]")
