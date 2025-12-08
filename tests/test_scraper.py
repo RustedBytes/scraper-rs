@@ -79,3 +79,18 @@ def test_css_alias_and_invalid_selector(sample_html: str) -> None:
 
     css_links = doc.css("a[href]")
     assert [link.text for link in css_links] == ["First", "Second"]
+
+
+def test_element_nested_selection(sample_html: str) -> None:
+    doc = Document(sample_html)
+
+    item = doc.find(".item")
+    assert item is not None
+
+    nested_links = item.select("a[href]")
+    assert len(nested_links) == 1
+    assert nested_links[0].text == "First"
+    assert nested_links[0].attr("href") == "/a"
+
+    assert item.find("p") is None
+    assert [link.tag for link in item.css("a")] == ["a"]

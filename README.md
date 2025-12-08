@@ -21,6 +21,9 @@ items = doc.select(".item")
 print(items[0].attr("data-id"))  # "1"
 print(items[0].to_dict())        # {"tag": "div", "text": "First", "html": "<a...>", ...}
 
+links_within_first = items[0].select("a[href]")
+print([link.attr("href") for link in links_within_first])  # ["/a"]
+
 first_link = doc.find("a[href]")
 print(first_link.text, first_link.attr("href"))  # First / /a
 
@@ -38,6 +41,7 @@ For a runnable sample, see `examples/demo.py`.
 - `.select(css)` → `list[Element]`, `.find(css)` → first `Element | None`, `.css(css)` is an alias.
 - `.text` returns normalized text; `.html` returns the original input.
 - `Element` exposes `.tag`, `.text`, `.html`, `.attrs` plus helpers `.attr(name)`, `.get(name, default)`, `.to_dict()`.
+- Elements support nested CSS selection via `.select(css)`, `.find(css)`, and `.css(css)`.
 - Top-level helpers mirror the class methods: `parse(html)`, `select(html, css)`, `first(html, css)`.
 
 ## Installation

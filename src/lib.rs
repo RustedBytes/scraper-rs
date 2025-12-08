@@ -4,7 +4,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
-use scraper::{Html, Selector};
+use scraper::{element_ref::ElementRef, Html, Selector};
 
 /// Tiny helper to truncate text in __repr__.
 fn truncate_for_repr(s: &str, max_chars: usize) -> String {
@@ -69,6 +69,25 @@ impl Element {
         self.attrs.get(name).cloned().or(default)
     }
 
+    /// Select elements inside this element's inner HTML using a CSS selector.
+    ///
+    ///     item = doc.find(".item")
+    ///     links = item.select("a[href]")
+    pub fn select(&self, css: &str) -> PyResult<Vec<Element>> {
+        select_fragment(&self.inner_html, css)
+    }
+
+    /// Return the first matching descendant element, or None if nothing matches.
+    pub fn find(&self, css: &str) -> PyResult<Option<Element>> {
+        let elements = self.select(css)?;
+        Ok(elements.into_iter().next())
+    }
+
+    /// Alias for `select(css)`.
+    pub fn css(&self, css: &str) -> PyResult<Vec<Element>> {
+        self.select(css)
+    }
+
     /// Convert this element to a plain dict.
     ///
     /// {
@@ -91,6 +110,44 @@ impl Element {
         let text_preview = truncate_for_repr(self.text.trim(), 40);
         format!("<Element tag='{}' text={}>", self.tag, text_preview)
     }
+}
+
+/// Convert a scraper ElementRef into our owned Element snapshot.
+fn snapshot_element(el: ElementRef<'_>) -> Element {
+    let tag = el.value().name().to_string();
+
+    let text = el
+        .text()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let inner_html = el.inner_html();
+
+    let mut attrs = HashMap::new();
+    for (name, value) in el.value().attrs() {
+        attrs.insert(name.to_string(), value.to_string());
+    }
+
+    Element {
+        tag,
+        text,
+        inner_html,
+        attrs,
+    }
+}
+
+fn parse_selector(css: &str) -> PyResult<Selector> {
+    Selector::parse(css)
+        .map_err(|e| PyValueError::new_err(format!("Invalid CSS selector {css:?}: {e:?}")))
+}
+
+fn select_fragment(html: &str, css: &str) -> PyResult<Vec<Element>> {
+    let selector = parse_selector(css)?;
+    let fragment = Html::parse_fragment(html);
+    Ok(fragment.select(&selector).map(snapshot_element).collect())
 }
 
 /// A parsed HTML document with convenient, Pythonic selectors.
@@ -154,38 +211,12 @@ impl Document {
     ///     for el in links:
     ///         print(el.text, el.attr("href"))
     pub fn select(&self, css: &str) -> PyResult<Vec<Element>> {
-        let selector = Selector::parse(css)
-            .map_err(|e| PyValueError::new_err(format!("Invalid CSS selector {css:?}: {e:?}")))?;
-
-        let mut out = Vec::new();
-
-        for el in self.html.select(&selector) {
-            let tag = el.value().name().to_string();
-
-            let text = el
-                .text()
-                .collect::<Vec<_>>()
-                .join(" ")
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ");
-
-            let inner_html = el.inner_html();
-
-            let mut attrs = HashMap::new();
-            for (name, value) in el.value().attrs() {
-                attrs.insert(name.to_string(), value.to_string());
-            }
-
-            out.push(Element {
-                tag,
-                text,
-                inner_html,
-                attrs,
-            });
-        }
-
-        Ok(out)
+        let selector = parse_selector(css)?;
+        Ok(self
+            .html
+            .select(&selector)
+            .map(snapshot_element)
+            .collect::<Vec<_>>())
     }
 
     /// Return the first matching element, or None if nothing matches.

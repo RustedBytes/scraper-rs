@@ -23,6 +23,10 @@ for el in items:
     print(el.attrs)  # full attribute dict
     print(el.to_dict())  # handy for debugging / serialization
 
+    nested_link = el.find("a[href]")
+    if nested_link:
+        print(nested_link.attr("href"))
+
 first_link = doc.find("a[href]")
 if first_link:
     print(first_link.text, first_link.attr("href"))
