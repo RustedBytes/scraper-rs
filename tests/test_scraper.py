@@ -1,6 +1,8 @@
+import importlib.metadata
+
 import pytest
 
-from scraper_rs import Document, first, parse, select
+from scraper_rs import Document, __version__, first, parse, select
 
 
 @pytest.fixture
@@ -94,3 +96,7 @@ def test_element_nested_selection(sample_html: str) -> None:
 
     assert item.find("p") is None
     assert [link.tag for link in item.css("a")] == ["a"]
+
+
+def test_version_exposed() -> None:
+    assert __version__ == importlib.metadata.version("scraper-rust")

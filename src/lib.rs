@@ -271,5 +271,8 @@ fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select, m)?)?;
     m.add_function(wrap_pyfunction!(first, m)?)?;
 
+    // Package metadata
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+
     Ok(())
 }

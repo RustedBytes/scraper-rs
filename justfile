@@ -6,6 +6,7 @@ install: init
     uv pip install maturin
 
 build:
+    rm -rf target/wheels/scraper_rust-*.whl
     uvx maturin build --release --compatibility linux
 
 build_manylinux:
@@ -16,8 +17,8 @@ build_manylinux:
         build --release --strip --compatibility manylinux2014
 
 install-wheel: build
-    uv pip uninstall scraper-rs
-    uv pip install target/wheels/scraper_rs-0.1.2-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+    uv pip uninstall scraper-rust
+    uv pip install target/wheels/scraper_rust-*.whl
 
 test:
     uv run pytest tests/test_scraper.py
