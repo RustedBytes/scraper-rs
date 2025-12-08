@@ -17,7 +17,7 @@ build_manylinux:
 
 install-wheel: build
     uv pip uninstall scraper-rs
-    uv pip install target/wheels/scraper_rs-0.1.1-cp310-abi3-linux_x86_64.whl
+    uv pip install target/wheels/scraper_rs-0.1.2-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
 test:
     uv run pytest tests/test_scraper.py
