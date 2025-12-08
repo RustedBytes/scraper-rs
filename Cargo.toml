@@ -1,0 +1,17 @@
+[package]
+name = "scraper-rs"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "scraper_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"] }
+scraper = "0.25"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"

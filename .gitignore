@@ -1,0 +1,34 @@
+# Rust
+/target/
+
+# Python builds
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.pyd
+*.so
+*.py[cod]
+__pycache__/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.python-version
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+
+# Editors
+.idea/
+.vscode/
+.DS_Store
