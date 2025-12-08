@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "scraper-rust"
-version = "0.1.3"
+version = "0.2.1"
 description = "Python bindings around rust-scraper/scraper with PyO3"
 authors = [{ name = "Yehor Smoliakov", email = "egorsmkv@gmail.com" }]
 requires-python = ">=3.10"
@@ -31,5 +31,6 @@ include = ["scraper_rs.pyi", "py.typed"]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
+    "maturin",
+    "pytest",
 ]

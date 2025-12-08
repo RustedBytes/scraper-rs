@@ -2,7 +2,16 @@ import importlib.metadata
 
 import pytest
 
-from scraper_rs import Document, __version__, first, parse, select
+from scraper_rs import (
+    Document,
+    __version__,
+    first,
+    parse,
+    select,
+    select_first,
+    xpath,
+    xpath_first,
+)
 
 
 @pytest.fixture
@@ -61,9 +70,16 @@ def test_find_and_first_helpers(sample_html: str) -> None:
     assert first_link.text == "First"
     assert first_link.attr("href") == "/a"
 
+    first_link_via_select = doc.select_first("a[href]")
+    assert first_link_via_select is not None
+    assert first_link_via_select.attr("href") == "/a"
+
     assert doc.find("p") is None
+    assert doc.select_first("p") is None
     assert first(sample_html, "a[href]").attr("href") == "/a"
     assert first(sample_html, "p") is None
+    assert select_first(sample_html, "a[href]").attr("href") == "/a"
+    assert select_first(sample_html, "p") is None
 
 
 def test_top_level_parse_and_select(sample_html: str) -> None:
@@ -74,6 +90,11 @@ def test_top_level_parse_and_select(sample_html: str) -> None:
     assert len(links) == 2
     assert [link.text for link in links] == ["First", "Second"]
     assert [link.attr("href") for link in links] == ["/a", "/b"]
+    assert [link.text for link in xpath(sample_html, "//div[@class='item']/a")] == [
+        "First",
+        "Second",
+    ]
+    assert xpath_first(sample_html, "//div[@data-id='1']/a").text == "First"
 
 
 def test_css_alias_and_invalid_selector(sample_html: str) -> None:
@@ -94,8 +115,29 @@ def test_element_nested_selection(sample_html: str) -> None:
     assert nested_links[0].text == "First"
     assert nested_links[0].attr("href") == "/a"
 
+    first_nested = item.select_first("a[href]")
+    assert first_nested is not None
+    assert first_nested.text == "First"
+
     assert item.find("p") is None
+    assert item.select_first("p") is None
     assert [link.tag for link in item.css("a")] == ["a"]
+
+def test_xpath_selection(sample_html: str) -> None:
+    doc = Document(sample_html)
+
+    items = doc.xpath("//div[@class='item']")
+    assert [item.attr("data-id") for item in items] == ["1", "2"]
+
+    last_link = doc.xpath_first("//div[@data-id='2']/a")
+    assert last_link is not None
+    assert last_link.text == "Second"
+    assert last_link.attr("href") == "/b"
+
+    nested = items[0].xpath("./a")
+    assert len(nested) == 1
+    assert nested[0].text == "First"
+    assert nested[0].attr("href") == "/a"
 
 
 def test_version_exposed() -> None:

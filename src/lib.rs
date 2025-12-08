@@ -4,7 +4,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
-use scraper::{element_ref::ElementRef, Html, Selector};
+use scraper::{Html, Selector, element_ref::ElementRef};
+use sxd_xpath::{Context, Factory, Value, nodeset::Node as XPathNode};
 
 /// Tiny helper to truncate text in __repr__.
 fn truncate_for_repr(s: &str, max_chars: usize) -> String {
@@ -78,14 +79,30 @@ impl Element {
     }
 
     /// Return the first matching descendant element, or None if nothing matches.
+    pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
+        Ok(self.select(css)?.into_iter().next())
+    }
+
+    /// Return the first matching descendant element, or None if nothing matches.
     pub fn find(&self, css: &str) -> PyResult<Option<Element>> {
-        let elements = self.select(css)?;
-        Ok(elements.into_iter().next())
+        self.select_first(css)
     }
 
     /// Alias for `select(css)`.
     pub fn css(&self, css: &str) -> PyResult<Vec<Element>> {
         self.select(css)
+    }
+
+    /// Evaluate an XPath expression against this element's children.
+    ///
+    /// The XPath runs inside this element; expressions must return element nodes.
+    pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
+        evaluate_fragment_xpath(&self.inner_html, expr)
+    }
+
+    /// Return the first matching descendant for an XPath expression, or None.
+    pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
+        Ok(self.xpath(expr)?.into_iter().next())
     }
 
     /// Convert this element to a plain dict.
@@ -150,6 +167,158 @@ fn select_fragment(html: &str, css: &str) -> PyResult<Vec<Element>> {
     Ok(fragment.select(&selector).map(snapshot_element).collect())
 }
 
+fn normalize_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn escape_html(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+fn serialize_node_into(buf: &mut String, node: XPathNode<'_>) {
+    if let Some(element) = node.element() {
+        let name = element.name().local_part();
+        buf.push('<');
+        buf.push_str(name);
+
+        for attr in element.attributes().iter() {
+            buf.push(' ');
+            buf.push_str(attr.name().local_part());
+            buf.push('=');
+            buf.push('"');
+            buf.push_str(&escape_html(attr.value()));
+            buf.push('"');
+        }
+
+        buf.push('>');
+        for child in element.children() {
+            serialize_node_into(buf, child.into());
+        }
+        buf.push_str("</");
+        buf.push_str(name);
+        buf.push('>');
+    } else if let Some(text) = node.text() {
+        buf.push_str(&escape_html(text.text()));
+    }
+}
+
+fn serialize_children(node: XPathNode<'_>) -> String {
+    let mut buf = String::new();
+    for child in node.children() {
+        serialize_node_into(&mut buf, child);
+    }
+    buf
+}
+
+fn collect_text_nodes(node: XPathNode<'_>, out: &mut Vec<String>) {
+    if let Some(text) = node.text() {
+        out.push(text.text().to_string());
+    }
+
+    for child in node.children() {
+        collect_text_nodes(child, out);
+    }
+}
+
+fn text_from_node(node: XPathNode<'_>) -> String {
+    let mut parts = Vec::new();
+    collect_text_nodes(node, &mut parts);
+    normalize_whitespace(&parts.join(" "))
+}
+
+fn snapshot_xpath_element(node: XPathNode<'_>) -> PyResult<Element> {
+    let element = node.element().ok_or_else(|| {
+        PyValueError::new_err("XPath expression must return element nodes for conversion")
+    })?;
+
+    let tag = element.name().local_part().to_string();
+    let text = text_from_node(node);
+    let inner_html = serialize_children(node);
+
+    let mut attrs = HashMap::new();
+    for attr in element.attributes().iter() {
+        attrs.insert(
+            attr.name().local_part().to_string(),
+            attr.value().to_string(),
+        );
+    }
+
+    Ok(Element {
+        tag,
+        text,
+        inner_html,
+        attrs,
+    })
+}
+
+fn evaluate_xpath_nodes<'d>(node: XPathNode<'d>, expr: &str) -> PyResult<Vec<XPathNode<'d>>> {
+    let factory = Factory::new();
+    let expression = factory
+        .build(expr)
+        .map_err(|e| PyValueError::new_err(format!("Invalid XPath {expr:?}: {e:?}")))?
+        .ok_or_else(|| PyValueError::new_err("Provided XPath expression is empty"))?;
+
+    let context = Context::new();
+    let result = expression
+        .evaluate(&context, node)
+        .map_err(|e| PyValueError::new_err(format!("Failed to evaluate XPath {expr:?}: {e:?}")))?;
+
+    match result {
+        Value::Nodeset(nodeset) => Ok(nodeset.document_order().into_iter().collect()),
+        other => Err(PyValueError::new_err(format!(
+            "XPath {expr:?} must return a node set (got {other:?})"
+        ))),
+    }
+}
+
+fn evaluate_xpath_elements<'d>(node: XPathNode<'d>, expr: &str) -> PyResult<Vec<Element>> {
+    evaluate_xpath_nodes(node, expr)?
+        .into_iter()
+        .map(snapshot_xpath_element)
+        .collect()
+}
+
+fn find_first_element_by_name<'d>(node: XPathNode<'d>, name: &str) -> Option<XPathNode<'d>> {
+    if let Some(element) = node.element()
+        && element.name().local_part() == name
+    {
+        return Some(node);
+    }
+
+    for child in node.children() {
+        if let Some(found) = find_first_element_by_name(child, name) {
+            return Some(found);
+        }
+    }
+
+    None
+}
+
+fn evaluate_fragment_xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
+    let wrapped = format!("<xpath-fragment>{}</xpath-fragment>", html);
+    let package = sxd_html::parse_html(&wrapped);
+    let document = package.as_document();
+
+    let Some(wrapper) = find_first_element_by_name(document.root().into(), "xpath-fragment") else {
+        return Err(PyValueError::new_err(
+            "Failed to parse HTML fragment for XPath evaluation",
+        ));
+    };
+
+    evaluate_xpath_elements(wrapper, expr)
+}
+
 /// A parsed HTML document with convenient, Pythonic selectors.
 ///
 /// Example:
@@ -163,6 +332,7 @@ fn select_fragment(html: &str, css: &str) -> PyResult<Vec<Element>> {
 pub struct Document {
     raw_html: String,
     html: Html,
+    xpath_package: sxd_document::Package,
 }
 
 #[pymethods]
@@ -172,9 +342,11 @@ impl Document {
     ///     doc = Document("<html>...</html>")
     #[new]
     pub fn new(html: &str) -> Self {
+        let xpath_package = sxd_html::parse_html(html);
         Self {
             raw_html: html.to_string(),
             html: Html::parse_document(html),
+            xpath_package,
         }
     }
 
@@ -221,12 +393,18 @@ impl Document {
 
     /// Return the first matching element, or None if nothing matches.
     ///
+    ///     first_link = doc.select_first("a[href]")
+    pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
+        Ok(self.select(css)?.into_iter().next())
+    }
+
+    /// Return the first matching element, or None if nothing matches.
+    ///
     ///     first_link = doc.find("a[href]")
     ///     if first_link:
     ///         print(first_link.text)
     pub fn find(&self, css: &str) -> PyResult<Option<Element>> {
-        let elements = self.select(css)?;
-        Ok(elements.into_iter().next())
+        self.select_first(css)
     }
 
     /// Shorthand for `select(css)`; more “requests-html” style.
@@ -234,6 +412,19 @@ impl Document {
     ///     doc.css("div.item")
     pub fn css(&self, css: &str) -> PyResult<Vec<Element>> {
         self.select(css)
+    }
+
+    /// Evaluate an XPath expression against the whole document.
+    ///
+    /// The expression must return element nodes; attribute/text results are not supported.
+    pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
+        let document = self.xpath_package.as_document();
+        evaluate_xpath_elements(document.root().into(), expr)
+    }
+
+    /// Return the first matching element for an XPath expression, or None.
+    pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
+        Ok(self.xpath(expr)?.into_iter().next())
     }
 
     fn __repr__(&self) -> String {
@@ -254,9 +445,27 @@ fn select(html: &str, css: &str) -> PyResult<Vec<Element>> {
 }
 
 #[pyfunction]
+fn select_first(html: &str, css: &str) -> PyResult<Option<Element>> {
+    let doc = Document::from_html(html);
+    doc.select_first(css)
+}
+
+#[pyfunction]
 fn first(html: &str, css: &str) -> PyResult<Option<Element>> {
     let doc = Document::from_html(html);
     doc.find(css)
+}
+
+#[pyfunction]
+fn xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
+    let doc = Document::from_html(html);
+    doc.xpath(expr)
+}
+
+#[pyfunction]
+fn xpath_first(html: &str, expr: &str) -> PyResult<Option<Element>> {
+    let doc = Document::from_html(html);
+    doc.xpath_first(expr)
 }
 
 /// Top-level module initializer.
@@ -269,7 +478,10 @@ fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Top-level functions
     m.add_function(wrap_pyfunction!(parse, m)?)?;
     m.add_function(wrap_pyfunction!(select, m)?)?;
+    m.add_function(wrap_pyfunction!(select_first, m)?)?;
     m.add_function(wrap_pyfunction!(first, m)?)?;
+    m.add_function(wrap_pyfunction!(xpath, m)?)?;
+    m.add_function(wrap_pyfunction!(xpath_first, m)?)?;
 
     // Package metadata
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

@@ -1,4 +1,4 @@
-from scraper_rs import Document, select, first
+from scraper_rs import Document, first, select, select_first, xpath
 
 html = """
 <html>
@@ -23,11 +23,11 @@ for el in items:
     print(el.attrs)  # full attribute dict
     print(el.to_dict())  # handy for debugging / serialization
 
-    nested_link = el.find("a[href]")
+    nested_link = el.select_first("a[href]")
     if nested_link:
         print(nested_link.attr("href"))
 
-first_link = doc.find("a[href]")
+first_link = doc.select_first("a[href]")  # alias: doc.find(...)
 if first_link:
     print(first_link.text, first_link.attr("href"))
 
@@ -37,3 +37,14 @@ print(links)  # [Element(...), Element(...)]
 
 first_link = first(html, "a[href]")
 print(first_link)
+print(select_first(html, "a[href]"))
+
+# 3) XPath helpers (expressions must return element nodes):
+xpath_links = doc.xpath("//div[@class='item']/a")
+print([link.text for link in xpath_links])  # ["First", "Second"]
+
+first_xpath = doc.xpath_first("//div[@data-id='2']/a")
+if first_xpath:
+    print(first_xpath.text, first_xpath.attr("href"))
+
+print([link.text for link in xpath(html, "//div[@class='item']/a")])
