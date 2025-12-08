@@ -16,6 +16,14 @@ build_manylinux:
         ghcr.io/pyo3/maturin:latest \
         build --release --strip --compatibility manylinux2014
 
+publish:
+    docker run --rm \
+        -v "$PWD":/io \
+        -w /io \
+        -e MATURIN_PYPI_TOKEN \
+        ghcr.io/pyo3/maturin:latest \
+        publish --skip-existing --compatibility manylinux2014
+
 install-wheel: clean build
     uv pip uninstall scraper-rust
     uv pip install target/wheels/scraper_rust-*.whl

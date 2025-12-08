@@ -4,10 +4,20 @@ build-backend = "maturin"
 
 [project]
 name = "scraper-rust"
-version = "0.2.1"
+version = "0.2.3"
 description = "Python bindings around rust-scraper/scraper with PyO3"
 authors = [{ name = "Yehor Smoliakov", email = "egorsmkv@gmail.com" }]
 requires-python = ">=3.10"
+license = { file = "LICENSE" }
+readme = "README.md"
+keywords = [
+    "html",
+    "scraping",
+    "css selectors",
+    "xpath",
+    "pyo3",
+    "rust",
+]
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -18,7 +28,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
 ]
+urls = { Homepage = "https://github.com/RustedBytes/scraper-rs", Documentation = "https://github.com/RustedBytes/scraper-rs#readme", Repository = "https://github.com/RustedBytes/scraper-rs", Issues = "https://github.com/RustedBytes/scraper-rs/issues" }
 
 [project.optional-dependencies]
 dev = ["maturin", "pytest"]

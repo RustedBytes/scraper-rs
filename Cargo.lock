@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "scraper-rs"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "pyo3",
  "scraper",
