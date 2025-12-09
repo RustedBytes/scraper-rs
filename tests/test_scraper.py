@@ -74,6 +74,67 @@ def test_document_size_limit(sample_html: str) -> None:
         select(sample_html, "a[href]", max_size_bytes=tiny_limit)
 
 
+def test_document_truncate_on_limit() -> None:
+    # Create a large HTML document
+    large_html = """
+    <html>
+      <body>
+        <div class="start">This is the beginning</div>
+        <div class="middle">This is the middle part with lots of text that will be truncated</div>
+        <div class="end">This should not appear in the truncated version</div>
+      </body>
+    </html>
+    """
+    
+    # Set a limit that will cut off the HTML midway
+    small_limit = 100
+    
+    # Without truncate_on_limit, should raise an error
+    with pytest.raises(ValueError, match="too large"):
+        Document(large_html, max_size_bytes=small_limit)
+    
+    # With truncate_on_limit=True, should parse successfully
+    doc = Document(large_html, max_size_bytes=small_limit, truncate_on_limit=True)
+    
+    # Should have parsed the beginning
+    assert doc.find(".start") is not None
+    
+    # The end should not be present due to truncation
+    assert doc.find(".end") is None
+    
+    # The HTML should be truncated
+    assert len(doc.html) == small_limit or len(doc.html) < small_limit
+    
+    # Test with top-level functions
+    items = select(large_html, ".start", max_size_bytes=small_limit, truncate_on_limit=True)
+    assert len(items) > 0
+    
+    first_item = first(large_html, ".start", max_size_bytes=small_limit, truncate_on_limit=True)
+    assert first_item is not None
+    
+    # Verify the end is not found
+    end_items = select(large_html, ".end", max_size_bytes=small_limit, truncate_on_limit=True)
+    assert len(end_items) == 0
+
+
+def test_truncate_utf8_boundary() -> None:
+    # Test that truncation respects UTF-8 character boundaries
+    # Using emoji which takes multiple bytes in UTF-8 encoding
+    html_with_emoji = "<html><body>Hello 😀 World</body></html>"
+    
+    # Set limit that would cut in the middle of a multi-byte character
+    # The emoji 😀 is a 4-byte UTF-8 sequence
+    limit_in_emoji = 20
+    
+    doc = Document(html_with_emoji, max_size_bytes=limit_in_emoji, truncate_on_limit=True)
+    
+    # Should not crash and should produce valid HTML
+    assert len(doc.html) <= limit_in_emoji
+    # The text should be valid (no broken UTF-8)
+    text = doc.text
+    assert isinstance(text, str)
+
+
 def test_find_and_first_helpers(sample_html: str) -> None:
     doc = Document(sample_html)
 
