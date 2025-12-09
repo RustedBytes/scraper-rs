@@ -1,15 +1,11 @@
 init:
-    uv venv --python python3.14
-    uv pip install --upgrade pip setuptools wheel
-
-fmt:
-    cargo fmt --all
-    uv run ruff format
+    uv venv --clear --python python3.14
 
 install: init
-    uv pip install maturin
+    uv sync --group dev
+    uv pip install --upgrade pip setuptools wheel
 
-build:
+build: clean
     rm -rf target/wheels/scraper_rust-*.whl
     uv run maturin build --release --compatibility linux
 
@@ -28,12 +24,16 @@ publish:
         ghcr.io/pyo3/maturin:latest \
         publish --skip-existing --compatibility manylinux2014
 
-install-wheel: clean build
+install-wheel: build
     uv pip uninstall scraper-rust
     uv pip install target/wheels/scraper_rust-*.whl
 
 test:
     uv run pytest tests/test_scraper.py
+
+fmt:
+    cargo fmt --all
+    uv run ruff format
 
 clean:
     rm -rf target
