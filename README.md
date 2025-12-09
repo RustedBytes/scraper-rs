@@ -54,6 +54,19 @@ doc = Document(html, max_size_bytes=5_000_000)  # 5 MB guard
 links = select(html, "a[href]", max_size_bytes=5_000_000)
 ```
 
+If you want to parse a limited portion of an oversized HTML document instead of rejecting it entirely, use `truncate_on_limit=True`:
+
+```py
+# Parse only the first 100KB of a large HTML document
+doc = Document(large_html, max_size_bytes=100_000, truncate_on_limit=True)
+links = doc.select("a[href]")  # Will only find links in the first 100KB
+
+# Also works with top-level functions
+items = select(large_html, ".item", max_size_bytes=100_000, truncate_on_limit=True)
+```
+
+Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding errors.
+
 ## API highlights
 
 - `Document(html: str)` / `Document.from_html(html)` parses once and keeps the DOM.
@@ -64,6 +77,7 @@ links = select(html, "a[href]", max_size_bytes=5_000_000)
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
 - Top-level helpers mirror the class methods: `parse(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
 - `max_size_bytes` lets you fail fast on oversized HTML; defaults to a 1 GiB limit.
+- `truncate_on_limit` allows parsing a truncated version (limited to `max_size_bytes`) of oversized HTML instead of raising an error.
 - Call `doc.close()` (or `with Document(html) as doc: ...`) to free parsed DOM resources when you're done.
 
 ## Installation
