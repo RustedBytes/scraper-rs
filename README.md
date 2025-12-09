@@ -1,6 +1,7 @@
 # scraper-rs
 
 [![PyPI - Version](https://img.shields.io/pypi/v/scraper-rust)](https://pypi.org/project/scraper-rust/)
+[![Tests](https://github.com/RustedBytes/scraper-rs/actions/workflows/tests.yml/badge.svg)](https://github.com/RustedBytes/scraper-rs/actions/workflows/tests.yml)
 
 Python bindings for the Rust `scraper` crate via PyO3. It gives you a lightweight `Document`/`Element` API with CSS selectors, XPath (via `sxd_html`/`sxd_xpath`), handy helpers, and zero Python-side parsing work.
 
