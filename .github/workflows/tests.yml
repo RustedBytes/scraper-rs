@@ -31,13 +31,21 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Create virtualenv
+        run: python -m venv .venv
+
       - name: Install Python dependencies
         run: |
+          source .venv/bin/activate
           python -m pip install --upgrade pip
           python -m pip install maturin pytest
 
       - name: Build extension module
-        run: maturin develop --release --locked
+        run: |
+          source .venv/bin/activate
+          maturin develop --release --locked
 
       - name: Run tests
-        run: pytest tests/test_scraper.py
+        run: |
+          source .venv/bin/activate
+          pytest tests/test_scraper.py
