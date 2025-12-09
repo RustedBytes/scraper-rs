@@ -5,8 +5,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
-use scraper::{element_ref::ElementRef, Html, Selector};
-use sxd_xpath::{nodeset::Node as XPathNode, Context, Factory, Value};
+use scraper::{Html, Selector, element_ref::ElementRef};
+use sxd_xpath::{Context, Factory, Value, nodeset::Node as XPathNode};
 
 const DEFAULT_MAX_PARSE_BYTES: usize = 1_073_741_824; // 1 GiB
 
@@ -375,11 +375,11 @@ impl Document {
     ) -> PyResult<Self> {
         let max_size_bytes = effective_max_size(max_size_bytes);
         let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-        
+
         // Parse using the Cow reference, then convert to owned String
         let xpath_package = sxd_html::parse_html(html_to_parse.as_ref());
         let html_parsed = Html::parse_document(html_to_parse.as_ref());
-        
+
         Ok(Self {
             raw_html: html_to_parse.into_owned(),
             html: html_parsed,
@@ -538,11 +538,7 @@ impl Drop for Document {
 
 #[pyfunction]
 #[pyo3(signature = (html, *, max_size_bytes=None, truncate_on_limit=false))]
-fn parse(
-    html: &str,
-    max_size_bytes: Option<usize>,
-    truncate_on_limit: bool,
-) -> PyResult<Document> {
+fn parse(html: &str, max_size_bytes: Option<usize>, truncate_on_limit: bool) -> PyResult<Document> {
     Document::from_html(html, max_size_bytes, truncate_on_limit)
 }
 

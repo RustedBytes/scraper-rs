@@ -2,6 +2,10 @@ init:
     uv venv --python python3.14
     uv pip install --upgrade pip setuptools wheel
 
+fmt:
+    cargo fmt --all
+    uv run ruff format
+
 install: init
     uv pip install maturin
 
