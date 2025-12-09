@@ -6,13 +6,17 @@ on:
       python-version:
         description: Python version to use for tests
         required: false
-        default: "3.14"
+        default: ""
 
 jobs:
   tests:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(github.event.inputs.python-version != '' && format('["{0}"]', github.event.inputs.python-version) || '["3.10","3.11","3.12","3.13","3.14"]') }}
 
     steps:
       - name: Checkout repository
@@ -21,7 +25,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ github.event.inputs.python-version || '3.12' }}
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Set up Rust
