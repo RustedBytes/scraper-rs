@@ -427,6 +427,32 @@ impl Document {
         Ok(self.xpath(expr)?.into_iter().next())
     }
 
+    /// Explicitly release parsed DOMs to free memory early.
+    ///
+    /// After calling, the document is reset to an empty state; selectors will
+    /// return no results.
+    pub fn close(&mut self) {
+        self.raw_html.clear();
+        self.html = Html::parse_document("");
+        self.xpath_package = sxd_html::parse_html("");
+    }
+
+    /// Support usage as a context manager to free resources on exit.
+    fn __enter__(slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf
+    }
+
+    /// Support usage as a context manager to free resources on exit.
+    fn __exit__(
+        mut self_: PyRefMut<'_, Self>,
+        _exc_type: Option<Bound<'_, PyAny>>,
+        _exc_value: Option<Bound<'_, PyAny>>,
+        _traceback: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        self_.close();
+        Ok(())
+    }
+
     fn __repr__(&self) -> String {
         let len = self.raw_html.len();
         format!("<Document len_html={}>", len)

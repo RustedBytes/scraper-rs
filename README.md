@@ -52,6 +52,7 @@ For a runnable sample, see `examples/demo.py`.
 - `Element` exposes `.tag`, `.text`, `.html`, `.attrs` plus helpers `.attr(name)`, `.get(name, default)`, `.to_dict()`.
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
 - Top-level helpers mirror the class methods: `parse(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
+- Call `doc.close()` (or `with Document(html) as doc: ...`) to free parsed DOM resources when you're done.
 
 ## Installation
 

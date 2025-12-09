@@ -142,3 +142,25 @@ def test_xpath_selection(sample_html: str) -> None:
 
 def test_version_exposed() -> None:
     assert __version__ == importlib.metadata.version("scraper-rust")
+
+
+def test_document_close_releases_resources(sample_html: str) -> None:
+    doc = Document(sample_html)
+
+    assert doc.select("a")
+    assert doc.xpath("//a")
+
+    doc.close()
+
+    assert doc.html == ""
+    assert doc.text == ""
+    assert doc.select("a") == []
+    assert doc.xpath("//a") == []
+
+
+def test_document_context_manager_closes(sample_html: str) -> None:
+    with Document(sample_html) as doc:
+        assert doc.find("a[href]") is not None
+
+    assert doc.html == ""
+    assert doc.select("a") == []
