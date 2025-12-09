@@ -149,13 +149,18 @@ def test_document_close_releases_resources(sample_html: str) -> None:
 
     assert doc.select("a")
     assert doc.xpath("//a")
+    assert doc.find("a")
 
     doc.close()
+    doc.close()  # idempotent
 
     assert doc.html == ""
     assert doc.text == ""
     assert doc.select("a") == []
+    assert doc.select_first("a") is None
+    assert doc.find("a") is None
     assert doc.xpath("//a") == []
+    assert doc.xpath_first("//a") is None
 
 
 def test_document_context_manager_closes(sample_html: str) -> None:

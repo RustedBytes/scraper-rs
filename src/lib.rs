@@ -333,6 +333,22 @@ pub struct Document {
     raw_html: String,
     html: Html,
     xpath_package: sxd_document::Package,
+    closed: bool,
+}
+
+impl Document {
+    /// Drop all DOM allocations and shrink owned strings.
+    fn release_dom(&mut self) {
+        if self.closed {
+            return;
+        }
+
+        self.raw_html.clear();
+        self.raw_html.shrink_to_fit();
+        self.html = Html::parse_document("");
+        self.xpath_package = sxd_html::parse_html("");
+        self.closed = true;
+    }
 }
 
 #[pymethods]
@@ -347,6 +363,7 @@ impl Document {
             raw_html: html.to_string(),
             html: Html::parse_document(html),
             xpath_package,
+            closed: false,
         }
     }
 
@@ -430,11 +447,10 @@ impl Document {
     /// Explicitly release parsed DOMs to free memory early.
     ///
     /// After calling, the document is reset to an empty state; selectors will
-    /// return no results.
+    /// return no results. Safe to call multiple times; it also runs when the
+    /// Document is dropped.
     pub fn close(&mut self) {
-        self.raw_html.clear();
-        self.html = Html::parse_document("");
-        self.xpath_package = sxd_html::parse_html("");
+        self.release_dom();
     }
 
     /// Support usage as a context manager to free resources on exit.
@@ -456,6 +472,12 @@ impl Document {
     fn __repr__(&self) -> String {
         let len = self.raw_html.len();
         format!("<Document len_html={}>", len)
+    }
+}
+
+impl Drop for Document {
+    fn drop(&mut self) {
+        self.release_dom();
     }
 }
 
