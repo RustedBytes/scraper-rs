@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use pyo3::exceptions::PyValueError;
@@ -13,11 +14,11 @@ fn effective_max_size(max_size_bytes: Option<usize>) -> usize {
     max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES)
 }
 
-fn ensure_within_size_limit(
-    html: &str,
+fn ensure_within_size_limit<'a>(
+    html: &'a str,
     max_size_bytes: usize,
     truncate_on_limit: bool,
-) -> PyResult<String> {
+) -> PyResult<Cow<'a, str>> {
     let len_bytes = html.len();
     if len_bytes > max_size_bytes {
         if truncate_on_limit {
@@ -26,7 +27,7 @@ fn ensure_within_size_limit(
             while truncate_at > 0 && !html.is_char_boundary(truncate_at) {
                 truncate_at -= 1;
             }
-            return Ok(html[..truncate_at].to_string());
+            return Ok(Cow::Owned(html[..truncate_at].to_string()));
         } else {
             return Err(PyValueError::new_err(format!(
                 "HTML document is too large to parse: {len_bytes} bytes exceeds max_size_bytes={max_size_bytes}"
@@ -34,7 +35,7 @@ fn ensure_within_size_limit(
         }
     }
 
-    Ok(html.to_string())
+    Ok(Cow::Borrowed(html))
 }
 
 /// Tiny helper to truncate text in __repr__.
@@ -374,11 +375,14 @@ impl Document {
     ) -> PyResult<Self> {
         let max_size_bytes = effective_max_size(max_size_bytes);
         let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-
-        let xpath_package = sxd_html::parse_html(&html_to_parse);
+        
+        // Convert Cow to String to avoid lifetime issues
+        let html_owned = html_to_parse.into_owned();
+        let xpath_package = sxd_html::parse_html(&html_owned);
+        
         Ok(Self {
-            raw_html: html_to_parse.clone(),
-            html: Html::parse_document(&html_to_parse),
+            raw_html: html_owned.clone(),
+            html: Html::parse_document(&html_owned),
             xpath_package,
             closed: false,
         })
