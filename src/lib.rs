@@ -376,13 +376,14 @@ impl Document {
         let max_size_bytes = effective_max_size(max_size_bytes);
         let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
         
-        // Convert Cow to String to avoid lifetime issues
-        let html_owned = html_to_parse.into_owned();
-        let xpath_package = sxd_html::parse_html(&html_owned);
+        // Parse using the Cow reference, then convert to owned String
+        let html_ref = html_to_parse.as_ref();
+        let xpath_package = sxd_html::parse_html(html_ref);
+        let html_parsed = Html::parse_document(html_ref);
         
         Ok(Self {
-            raw_html: html_owned.clone(),
-            html: Html::parse_document(&html_owned),
+            raw_html: html_to_parse.into_owned(),
+            html: html_parsed,
             xpath_package,
             closed: false,
         })
