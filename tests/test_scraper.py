@@ -61,6 +61,19 @@ def test_select_and_element_helpers(sample_html: str) -> None:
     assert first_item.to_dict() == expected_dict
 
 
+def test_document_size_limit(sample_html: str) -> None:
+    tiny_limit = 10
+    with pytest.raises(ValueError, match="too large"):
+        Document(sample_html, max_size_bytes=tiny_limit)
+
+    ok_limit = len(sample_html.encode("utf-8"))
+    doc = Document(sample_html, max_size_bytes=ok_limit)
+    assert doc.find("a[href]") is not None
+
+    with pytest.raises(ValueError):
+        select(sample_html, "a[href]", max_size_bytes=tiny_limit)
+
+
 def test_find_and_first_helpers(sample_html: str) -> None:
     doc = Document(sample_html)
 

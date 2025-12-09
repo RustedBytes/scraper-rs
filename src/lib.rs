@@ -4,8 +4,25 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
-use scraper::{Html, Selector, element_ref::ElementRef};
-use sxd_xpath::{Context, Factory, Value, nodeset::Node as XPathNode};
+use scraper::{element_ref::ElementRef, Html, Selector};
+use sxd_xpath::{nodeset::Node as XPathNode, Context, Factory, Value};
+
+const DEFAULT_MAX_PARSE_BYTES: usize = 1_073_741_824; // 1 GiB
+
+fn effective_max_size(max_size_bytes: Option<usize>) -> usize {
+    max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES)
+}
+
+fn ensure_within_size_limit(html: &str, max_size_bytes: usize) -> PyResult<()> {
+    let len_bytes = html.len();
+    if len_bytes > max_size_bytes {
+        return Err(PyValueError::new_err(format!(
+            "HTML document is too large to parse: {len_bytes} bytes exceeds max_size_bytes={max_size_bytes}"
+        )));
+    }
+
+    Ok(())
+}
 
 /// Tiny helper to truncate text in __repr__.
 fn truncate_for_repr(s: &str, max_chars: usize) -> String {
@@ -337,6 +354,19 @@ pub struct Document {
 }
 
 impl Document {
+    fn parse_with_limit(html: &str, max_size_bytes: Option<usize>) -> PyResult<Self> {
+        let max_size_bytes = effective_max_size(max_size_bytes);
+        ensure_within_size_limit(html, max_size_bytes)?;
+
+        let xpath_package = sxd_html::parse_html(html);
+        Ok(Self {
+            raw_html: html.to_string(),
+            html: Html::parse_document(html),
+            xpath_package,
+            closed: false,
+        })
+    }
+
     /// Drop all DOM allocations and shrink owned strings.
     fn release_dom(&mut self) {
         if self.closed {
@@ -357,20 +387,16 @@ impl Document {
     ///
     ///     doc = Document("<html>...</html>")
     #[new]
-    pub fn new(html: &str) -> Self {
-        let xpath_package = sxd_html::parse_html(html);
-        Self {
-            raw_html: html.to_string(),
-            html: Html::parse_document(html),
-            xpath_package,
-            closed: false,
-        }
+    #[pyo3(signature = (html, *, max_size_bytes=None))]
+    pub fn new(html: &str, max_size_bytes: Option<usize>) -> PyResult<Self> {
+        Self::parse_with_limit(html, max_size_bytes)
     }
 
     /// Alternate constructor: Document.from_html(html: str) -> Document
     #[staticmethod]
-    pub fn from_html(html: &str) -> Self {
-        Self::new(html)
+    #[pyo3(signature = (html, *, max_size_bytes=None))]
+    pub fn from_html(html: &str, max_size_bytes: Option<usize>) -> PyResult<Self> {
+        Self::parse_with_limit(html, max_size_bytes)
     }
 
     /// Return the original HTML string.
@@ -482,37 +508,51 @@ impl Drop for Document {
 }
 
 #[pyfunction]
-fn parse(html: &str) -> Document {
-    Document::from_html(html)
+#[pyo3(signature = (html, *, max_size_bytes=None))]
+fn parse(html: &str, max_size_bytes: Option<usize>) -> PyResult<Document> {
+    Document::from_html(html, max_size_bytes)
 }
 
 #[pyfunction]
-fn select(html: &str, css: &str) -> PyResult<Vec<Element>> {
-    let doc = Document::from_html(html);
+#[pyo3(signature = (html, css, *, max_size_bytes=None))]
+fn select(html: &str, css: &str, max_size_bytes: Option<usize>) -> PyResult<Vec<Element>> {
+    let doc = Document::from_html(html, max_size_bytes)?;
     doc.select(css)
 }
 
 #[pyfunction]
-fn select_first(html: &str, css: &str) -> PyResult<Option<Element>> {
-    let doc = Document::from_html(html);
+#[pyo3(signature = (html, css, *, max_size_bytes=None))]
+fn select_first(
+    html: &str,
+    css: &str,
+    max_size_bytes: Option<usize>,
+) -> PyResult<Option<Element>> {
+    let doc = Document::from_html(html, max_size_bytes)?;
     doc.select_first(css)
 }
 
 #[pyfunction]
-fn first(html: &str, css: &str) -> PyResult<Option<Element>> {
-    let doc = Document::from_html(html);
+#[pyo3(signature = (html, css, *, max_size_bytes=None))]
+fn first(html: &str, css: &str, max_size_bytes: Option<usize>) -> PyResult<Option<Element>> {
+    let doc = Document::from_html(html, max_size_bytes)?;
     doc.find(css)
 }
 
 #[pyfunction]
-fn xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
-    let doc = Document::from_html(html);
+#[pyo3(signature = (html, expr, *, max_size_bytes=None))]
+fn xpath(html: &str, expr: &str, max_size_bytes: Option<usize>) -> PyResult<Vec<Element>> {
+    let doc = Document::from_html(html, max_size_bytes)?;
     doc.xpath(expr)
 }
 
 #[pyfunction]
-fn xpath_first(html: &str, expr: &str) -> PyResult<Option<Element>> {
-    let doc = Document::from_html(html);
+#[pyo3(signature = (html, expr, *, max_size_bytes=None))]
+fn xpath_first(
+    html: &str,
+    expr: &str,
+    max_size_bytes: Option<usize>,
+) -> PyResult<Option<Element>> {
+    let doc = Document::from_html(html, max_size_bytes)?;
     doc.xpath_first(expr)
 }
 

@@ -43,6 +43,17 @@ print([link.text for link in xpath(html, "//div[@class='item']/a")])  # ["First"
 
 For a runnable sample, see `examples/demo.py`.
 
+### Large documents and memory safety
+
+To avoid runaway allocations, parsing defaults to a 1 GiB cap. Pass `max_size_bytes` to override:
+
+```py
+from scraper_rs import Document, select
+
+doc = Document(html, max_size_bytes=5_000_000)  # 5 MB guard
+links = select(html, "a[href]", max_size_bytes=5_000_000)
+```
+
 ## API highlights
 
 - `Document(html: str)` / `Document.from_html(html)` parses once and keeps the DOM.
@@ -52,6 +63,7 @@ For a runnable sample, see `examples/demo.py`.
 - `Element` exposes `.tag`, `.text`, `.html`, `.attrs` plus helpers `.attr(name)`, `.get(name, default)`, `.to_dict()`.
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
 - Top-level helpers mirror the class methods: `parse(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
+- `max_size_bytes` lets you fail fast on oversized HTML; defaults to a 1 GiB limit.
 - Call `doc.close()` (or `with Document(html) as doc: ...`) to free parsed DOM resources when you're done.
 
 ## Installation

@@ -103,7 +103,7 @@ wheels = [
 
 [[package]]
 name = "scraper-rust"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "." }
 
 [package.optional-dependencies]
