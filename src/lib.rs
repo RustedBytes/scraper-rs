@@ -377,9 +377,8 @@ impl Document {
         let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
         
         // Parse using the Cow reference, then convert to owned String
-        let html_ref = html_to_parse.as_ref();
-        let xpath_package = sxd_html::parse_html(html_ref);
-        let html_parsed = Html::parse_document(html_ref);
+        let xpath_package = sxd_html::parse_html(html_to_parse.as_ref());
+        let html_parsed = Html::parse_document(html_to_parse.as_ref());
         
         Ok(Self {
             raw_html: html_to_parse.into_owned(),

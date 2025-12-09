@@ -119,12 +119,12 @@ def test_document_truncate_on_limit() -> None:
 
 def test_truncate_utf8_boundary() -> None:
     # Test that truncation respects UTF-8 character boundaries
-    # Using emoji which takes multiple bytes
+    # Using emoji which takes multiple bytes in UTF-8 encoding
     html_with_emoji = "<html><body>Hello 😀 World</body></html>"
     
-    # Set limit to cut in the middle of the emoji
-    # "Hello " is 6 bytes, emoji is 4 bytes
-    limit_in_emoji = 8
+    # Set limit that would cut in the middle of a multi-byte character
+    # The emoji 😀 is a 4-byte UTF-8 sequence
+    limit_in_emoji = 20
     
     doc = Document(html_with_emoji, max_size_bytes=limit_in_emoji, truncate_on_limit=True)
     
