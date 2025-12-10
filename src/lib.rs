@@ -552,7 +552,7 @@ fn select(
     truncate_on_limit: bool,
 ) -> PyResult<Vec<Element>> {
     py.detach(|| {
-        let doc = Document::parse_with_limit(html, max_size_bytes, truncate_on_limit)?;
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
         doc.select(css)
     })
 }
@@ -567,7 +567,7 @@ fn select_first(
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
     py.detach(|| {
-        let doc = Document::parse_with_limit(html, max_size_bytes, truncate_on_limit)?;
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
         doc.select_first(css)
     })
 }
@@ -582,7 +582,7 @@ fn first(
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
     py.detach(|| {
-        let doc = Document::parse_with_limit(html, max_size_bytes, truncate_on_limit)?;
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
         doc.find(css)
     })
 }
@@ -597,7 +597,7 @@ fn xpath(
     truncate_on_limit: bool,
 ) -> PyResult<Vec<Element>> {
     py.detach(|| {
-        let doc = Document::parse_with_limit(html, max_size_bytes, truncate_on_limit)?;
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
         doc.xpath(expr)
     })
 }
@@ -612,7 +612,7 @@ fn xpath_first(
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
     py.detach(|| {
-        let doc = Document::parse_with_limit(html, max_size_bytes, truncate_on_limit)?;
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
         doc.xpath_first(expr)
     })
 }
