@@ -100,7 +100,7 @@ If you have `just` installed, the repo includes helpers: `just build` (local whe
 
 ## Projects Using scraper-rs
 
-- [**silkworm**](https://github.com/BitingSnakes/silkworm) - A web scraping framework
+- [**silkworm**](https://github.com/BitingSnakes/silkworm) - Async web scraping framework on top of Rust
 
 ## Development
 
