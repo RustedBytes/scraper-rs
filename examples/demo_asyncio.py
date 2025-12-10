@@ -38,6 +38,13 @@ async def main():
         print(f"    - {link.text}: {link.attr('href')}")
     print()
 
+    # Example 3b: Select first element by XPath asynchronously
+    print("Example 3b: Async xpath_first")
+    first_link = await async_scraper.xpath_first(html, "//a[@href]")
+    if first_link:
+        print(f"  First link: {first_link.text} -> {first_link.attr('href')}")
+    print()
+
     # Example 4: Multiple concurrent async operations
     print("Example 4: Concurrent async operations")
     results = await asyncio.gather(
