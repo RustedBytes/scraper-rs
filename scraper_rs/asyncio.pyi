@@ -20,6 +20,13 @@ async def select(
     max_size_bytes: int | None = ...,
     truncate_on_limit: bool = False,
 ) -> list[Element]: ...
+async def select_first(
+    html: str,
+    css: str,
+    *,
+    max_size_bytes: int | None = ...,
+    truncate_on_limit: bool = False,
+) -> Element | None: ...
 async def xpath(
     html: str,
     expr: str,
@@ -27,3 +34,10 @@ async def xpath(
     max_size_bytes: int | None = ...,
     truncate_on_limit: bool = False,
 ) -> list[Element]: ...
+async def xpath_first(
+    html: str,
+    expr: str,
+    *,
+    max_size_bytes: int | None = ...,
+    truncate_on_limit: bool = False,
+) -> Element | None: ...
