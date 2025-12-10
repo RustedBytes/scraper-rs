@@ -10,7 +10,6 @@ only Element objects which are thread-safe.
 """
 
 import asyncio
-from functools import partial
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
