@@ -141,6 +141,48 @@ async def test_async_with_truncate_on_limit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_async_xpath_first(sample_html: str) -> None:
+    """Test the async xpath_first function."""
+    # Find the first link by XPath
+    first_link = await async_scraper.xpath_first(sample_html, "//a[@href]")
+
+    assert first_link is not None
+    assert isinstance(first_link, Element)
+    assert first_link.tag == "a"
+    assert first_link.text == "First"
+    assert first_link.attr("href") == "/a"
+
+    # Find a specific link
+    second_link = await async_scraper.xpath_first(sample_html, "//div[@data-id='2']/a")
+    assert second_link is not None
+    assert second_link.text == "Second"
+    assert second_link.attr("href") == "/b"
+
+    # Test with non-matching XPath (should return None)
+    no_match = await async_scraper.xpath_first(sample_html, "//p[@class='missing']")
+    assert no_match is None
+
+
+@pytest.mark.asyncio
+async def test_async_xpath_first_with_max_size(sample_html: str) -> None:
+    """Test async xpath_first with max_size_bytes parameter."""
+    # Should work with sufficient size
+    ok_limit = len(sample_html.encode("utf-8"))
+    first_link = await async_scraper.xpath_first(
+        sample_html, "//a[@href]", max_size_bytes=ok_limit
+    )
+    assert first_link is not None
+    assert first_link.text == "First"
+
+    # Should fail with tiny limit
+    tiny_limit = 10
+    with pytest.raises(ValueError, match="too large"):
+        await async_scraper.xpath_first(
+            sample_html, "//a[@href]", max_size_bytes=tiny_limit
+        )
+
+
+@pytest.mark.asyncio
 async def test_multiple_async_calls_concurrently(sample_html: str) -> None:
     """Test that multiple async calls can be made concurrently."""
     # Run multiple async operations concurrently

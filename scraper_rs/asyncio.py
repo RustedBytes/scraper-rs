@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 from . import Document as _Document
 from . import select as _select
 from . import xpath as _xpath
+from . import xpath_first as _xpath_first
 
 
 async def parse(html: str, **kwargs) -> "Document":
@@ -71,3 +72,19 @@ async def xpath(html: str, expr: str, **kwargs) -> list["Element"]:
         A list of Element objects matching the XPath expression
     """
     return await asyncio.to_thread(_xpath, html, expr, **kwargs)
+
+
+async def xpath_first(html: str, expr: str, **kwargs) -> "Element | None":
+    """Select the first element by XPath expression asynchronously.
+
+    This function runs in a thread pool to avoid blocking the event loop.
+
+    Args:
+        html: The HTML string to parse
+        expr: XPath expression string
+        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
+
+    Returns:
+        The first Element matching the XPath expression, or None if no match
+    """
+    return await asyncio.to_thread(_xpath_first, html, expr, **kwargs)
