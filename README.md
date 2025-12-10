@@ -3,7 +3,7 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/scraper-rust)](https://pypi.org/project/scraper-rust/)
 [![Tests](https://github.com/RustedBytes/scraper-rs/actions/workflows/tests.yml/badge.svg)](https://github.com/RustedBytes/scraper-rs/actions/workflows/tests.yml)
 
-Python bindings for the Rust `scraper` crate via PyO3. It gives you a lightweight `Document`/`Element` API with CSS selectors, XPath (via `sxd_html`/`sxd_xpath`), handy helpers, and zero Python-side parsing work.
+Python bindings for the Rust `scraper` crate via PyO3. It provides a lightweight `Document`/`Element` API with CSS selectors, XPath (via `sxd_html`/`sxd_xpath`), handy helpers, and zero Python-side parsing work.
 
 ## Quick start
 
@@ -25,7 +25,7 @@ print(items[0].attr("data-id"))  # "1"
 print(items[0].to_dict())        # {"tag": "div", "text": "First", "html": "<a...>", ...}
 
 first_link = doc.select_first("a[href]")  # alias: doc.find(...)
-print(first_link.text, first_link.attr("href"))  # First / /a
+print(first_link.text, first_link.attr("href"))  # First /a
 links_within_first = first_link.select("a[href]")
 print([link.attr("href") for link in links_within_first])  # ["/a"]
 
@@ -46,7 +46,7 @@ For a runnable sample, see `examples/demo.py`.
 
 ### Async usage
 
-The `scraper_rs.asyncio` module wraps the top-level helpers so you can keep the event loop responsive. `parse` yields to the loop (the `Document` stays in the current thread), while `select`/`xpath` run in a thread pool:
+The `scraper_rs.asyncio` module wraps the top-level helpers to keep the event loop responsive. `parse` yields to the event loop between operations, while `select`/`xpath` run in a thread pool:
 
 ```py
 import asyncio
@@ -96,7 +96,7 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - `Document(html: str)` / `Document.from_html(html)` parses once and keeps the DOM.
 - `.select(css)` → `list[Element]`, `.select_first(css)` / `.find(css)` → first `Element | None`, `.css(css)` is an alias.
 - `.xpath(expr)` / `.xpath_first(expr)` evaluate XPath expressions that return element nodes.
-- `.text` returns normalized text; `.html` returns the original input.
+- `.text` returns normalized text; `.html` returns the element's HTML.
 - `scraper_rs.asyncio` exposes async `parse`/`select`/`xpath` wrappers to keep the event loop responsive.
 - `Element` exposes `.tag`, `.text`, `.html`, `.attrs` plus helpers `.attr(name)`, `.get(name, default)`, `.to_dict()`.
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
@@ -131,7 +131,7 @@ If you have `just` installed, the repo includes helpers: `just build` (local whe
 Requirements: Rust toolchain, Python 3.10+, `maturin`, and `pytest` for tests.
 
 - Run tests: `just test` or `uv run pytest tests/test_scraper.py`
-- Format/typing: Rust and Python are small; no formatters are enforced yet.
+- Format/typing: The codebase is small; formatters are not strictly enforced yet.
 - The PyO3 module name is `scraper_rs`; the Rust crate is built as `cdylib`.
 
 Contributions and issues are welcome. If you add public API, please extend `tests/test_scraper.py` and the example script accordingly.
