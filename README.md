@@ -44,6 +44,29 @@ print([link.text for link in xpath(html, "//div[@class='item']/a")])  # ["First"
 
 For a runnable sample, see `examples/demo.py`.
 
+### Async usage
+
+The `scraper_rs.asyncio` module wraps the top-level helpers so you can keep the event loop responsive. `parse` yields to the loop (the `Document` stays in the current thread), while `select`/`xpath` run in a thread pool:
+
+```py
+import asyncio
+from scraper_rs import asyncio as scraping_async
+
+html = "<div class='item'><a href='/a'>First</a></div>"
+
+
+async def main():
+    doc = await scraping_async.parse(html)
+    links = await scraping_async.select(html, "a[href]")
+    print(doc.select_first(".item").text)  # First
+    print([link.attr("href") for link in links])  # ["/a"]
+
+
+asyncio.run(main())
+```
+
+All async functions accept the same keyword arguments as their sync counterparts (`max_size_bytes`, `truncate_on_limit`, etc.).
+
 ### Large documents and memory safety
 
 To avoid runaway allocations, parsing defaults to a 1 GiB cap. Pass `max_size_bytes` to override:
@@ -74,6 +97,7 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - `.select(css)` → `list[Element]`, `.select_first(css)` / `.find(css)` → first `Element | None`, `.css(css)` is an alias.
 - `.xpath(expr)` / `.xpath_first(expr)` evaluate XPath expressions that return element nodes.
 - `.text` returns normalized text; `.html` returns the original input.
+- `scraper_rs.asyncio` exposes async `parse`/`select`/`xpath` wrappers to keep the event loop responsive.
 - `Element` exposes `.tag`, `.text`, `.html`, `.attrs` plus helpers `.attr(name)`, `.get(name, default)`, `.to_dict()`.
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
 - Top-level helpers mirror the class methods: `parse(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
