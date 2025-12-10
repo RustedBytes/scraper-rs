@@ -183,6 +183,48 @@ async def test_async_xpath_first_with_max_size(sample_html: str) -> None:
 
 
 @pytest.mark.asyncio
+async def test_async_select_first(sample_html: str) -> None:
+    """Test the async select_first function."""
+    # Find the first item by CSS selector
+    first_item = await async_scraper.select_first(sample_html, ".item")
+
+    assert first_item is not None
+    assert isinstance(first_item, Element)
+    assert first_item.tag == "div"
+    assert first_item.text == "First"
+    assert first_item.attr("data-id") == "1"
+
+    # Find a specific element
+    second_link = await async_scraper.select_first(sample_html, "div[data-id='2'] a")
+    assert second_link is not None
+    assert second_link.text == "Second"
+    assert second_link.attr("href") == "/b"
+
+    # Test with non-matching selector (should return None)
+    no_match = await async_scraper.select_first(sample_html, "p.missing")
+    assert no_match is None
+
+
+@pytest.mark.asyncio
+async def test_async_select_first_with_max_size(sample_html: str) -> None:
+    """Test async select_first with max_size_bytes parameter."""
+    # Should work with sufficient size
+    ok_limit = len(sample_html.encode("utf-8"))
+    first_item = await async_scraper.select_first(
+        sample_html, ".item", max_size_bytes=ok_limit
+    )
+    assert first_item is not None
+    assert first_item.text == "First"
+
+    # Should fail with tiny limit
+    tiny_limit = 10
+    with pytest.raises(ValueError, match="too large"):
+        await async_scraper.select_first(
+            sample_html, ".item", max_size_bytes=tiny_limit
+        )
+
+
+@pytest.mark.asyncio
 async def test_multiple_async_calls_concurrently(sample_html: str) -> None:
     """Test that multiple async calls can be made concurrently."""
     # Run multiple async operations concurrently

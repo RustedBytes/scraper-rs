@@ -38,8 +38,15 @@ async def main():
         print(f"    - {link.text}: {link.attr('href')}")
     print()
 
-    # Example 3b: Select first element by XPath asynchronously
-    print("Example 3b: Async xpath_first")
+    # Example 3b: Select first element by CSS selector asynchronously
+    print("Example 3b: Async select_first")
+    first_item = await async_scraper.select_first(html, ".item")
+    if first_item:
+        print(f"  First item: {first_item.text} (data-id={first_item.attr('data-id')})")
+    print()
+
+    # Example 3c: Select first element by XPath asynchronously
+    print("Example 3c: Async xpath_first")
     first_link = await async_scraper.xpath_first(html, "//a[@href]")
     if first_link:
         print(f"  First link: {first_link.text} -> {first_link.attr('href')}")

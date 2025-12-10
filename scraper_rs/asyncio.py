@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 # These will be available after the package is built
 from . import Document as _Document
 from . import select as _select
+from . import select_first as _select_first
 from . import xpath as _xpath
 from . import xpath_first as _xpath_first
 
@@ -56,6 +57,22 @@ async def select(html: str, css: str, **kwargs) -> list["Element"]:
         A list of Element objects matching the CSS selector
     """
     return await asyncio.to_thread(_select, html, css, **kwargs)
+
+
+async def select_first(html: str, css: str, **kwargs) -> "Element | None":
+    """Select the first element by CSS selector asynchronously.
+
+    This function runs in a thread pool to avoid blocking the event loop.
+
+    Args:
+        html: The HTML string to parse
+        css: CSS selector string
+        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
+
+    Returns:
+        The first Element matching the CSS selector, or None if no match
+    """
+    return await asyncio.to_thread(_select_first, html, css, **kwargs)
 
 
 async def xpath(html: str, expr: str, **kwargs) -> list["Element"]:
