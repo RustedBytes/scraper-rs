@@ -98,6 +98,10 @@ pip install target/wheels/scraper_rs-*.whl
 
 If you have `just` installed, the repo includes helpers: `just build` (local wheel), `just install-wheel` (install the built wheel), and `just build_manylinux` (via the official maturin Docker image).
 
+## Projects Using scraper-rs
+
+- [**silkworm**](https://github.com/BitingSnakes/silkworm) - A web scraping framework
+
 ## Development
 
 Requirements: Rust toolchain, Python 3.10+, `maturin`, and `pytest` for tests.
