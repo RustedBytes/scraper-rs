@@ -545,61 +545,76 @@ fn parse(html: &str, max_size_bytes: Option<usize>, truncate_on_limit: bool) -> 
 #[pyfunction]
 #[pyo3(signature = (html, css, *, max_size_bytes=None, truncate_on_limit=false))]
 fn select(
+    py: Python<'_>,
     html: &str,
     css: &str,
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Vec<Element>> {
-    let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-    doc.select(css)
+    py.detach(|| {
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
+        doc.select(css)
+    })
 }
 
 #[pyfunction]
 #[pyo3(signature = (html, css, *, max_size_bytes=None, truncate_on_limit=false))]
 fn select_first(
+    py: Python<'_>,
     html: &str,
     css: &str,
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
-    let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-    doc.select_first(css)
+    py.detach(|| {
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
+        doc.select_first(css)
+    })
 }
 
 #[pyfunction]
 #[pyo3(signature = (html, css, *, max_size_bytes=None, truncate_on_limit=false))]
 fn first(
+    py: Python<'_>,
     html: &str,
     css: &str,
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
-    let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-    doc.find(css)
+    py.detach(|| {
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
+        doc.find(css)
+    })
 }
 
 #[pyfunction]
 #[pyo3(signature = (html, expr, *, max_size_bytes=None, truncate_on_limit=false))]
 fn xpath(
+    py: Python<'_>,
     html: &str,
     expr: &str,
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Vec<Element>> {
-    let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-    doc.xpath(expr)
+    py.detach(|| {
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
+        doc.xpath(expr)
+    })
 }
 
 #[pyfunction]
 #[pyo3(signature = (html, expr, *, max_size_bytes=None, truncate_on_limit=false))]
 fn xpath_first(
+    py: Python<'_>,
     html: &str,
     expr: &str,
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
-    let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-    doc.xpath_first(expr)
+    py.detach(|| {
+        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
+        doc.xpath_first(expr)
+    })
 }
 
 /// Top-level module initializer.
