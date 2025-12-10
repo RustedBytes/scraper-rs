@@ -24,7 +24,7 @@ def sample_html() -> str:
 async def test_async_parse(sample_html: str) -> None:
     """Test the async parse function."""
     doc = await async_scraper.parse(sample_html)
-    
+
     assert isinstance(doc, Document)
     assert doc.text == "First Second"
     assert doc.html == sample_html
@@ -34,7 +34,7 @@ async def test_async_parse(sample_html: str) -> None:
 async def test_async_select(sample_html: str) -> None:
     """Test the async select function."""
     items = await async_scraper.select(sample_html, ".item")
-    
+
     assert len(items) == 2
     assert all(isinstance(item, Element) for item in items)
     assert items[0].tag == "div"
@@ -48,7 +48,7 @@ async def test_async_select(sample_html: str) -> None:
 async def test_async_xpath(sample_html: str) -> None:
     """Test the async xpath function."""
     links = await async_scraper.xpath(sample_html, "//a[@href]")
-    
+
     assert len(links) == 2
     assert all(isinstance(link, Element) for link in links)
     assert links[0].tag == "a"
@@ -65,7 +65,7 @@ async def test_async_parse_with_max_size(sample_html: str) -> None:
     ok_limit = len(sample_html.encode("utf-8"))
     doc = await async_scraper.parse(sample_html, max_size_bytes=ok_limit)
     assert doc.text == "First Second"
-    
+
     # Should fail with tiny limit
     tiny_limit = 10
     with pytest.raises(ValueError, match="too large"):
@@ -79,7 +79,7 @@ async def test_async_select_with_max_size(sample_html: str) -> None:
     ok_limit = len(sample_html.encode("utf-8"))
     items = await async_scraper.select(sample_html, ".item", max_size_bytes=ok_limit)
     assert len(items) == 2
-    
+
     # Should fail with tiny limit
     tiny_limit = 10
     with pytest.raises(ValueError, match="too large"):
@@ -91,9 +91,11 @@ async def test_async_xpath_with_max_size(sample_html: str) -> None:
     """Test async xpath with max_size_bytes parameter."""
     # Should work with sufficient size
     ok_limit = len(sample_html.encode("utf-8"))
-    links = await async_scraper.xpath(sample_html, "//a[@href]", max_size_bytes=ok_limit)
+    links = await async_scraper.xpath(
+        sample_html, "//a[@href]", max_size_bytes=ok_limit
+    )
     assert len(links) == 2
-    
+
     # Should fail with tiny limit
     tiny_limit = 10
     with pytest.raises(ValueError, match="too large"):
@@ -112,25 +114,28 @@ async def test_async_with_truncate_on_limit() -> None:
       </body>
     </html>
     """
-    
+
     small_limit = 100
-    
+
     # Test parse with truncate_on_limit
     doc = await async_scraper.parse(
         large_html, max_size_bytes=small_limit, truncate_on_limit=True
     )
     assert doc.find(".start") is not None
     assert doc.find(".end") is None
-    
+
     # Test select with truncate_on_limit
     items = await async_scraper.select(
         large_html, ".start", max_size_bytes=small_limit, truncate_on_limit=True
     )
     assert len(items) > 0
-    
+
     # Test xpath with truncate_on_limit
     start_elements = await async_scraper.xpath(
-        large_html, "//div[@class='start']", max_size_bytes=small_limit, truncate_on_limit=True
+        large_html,
+        "//div[@class='start']",
+        max_size_bytes=small_limit,
+        truncate_on_limit=True,
     )
     assert len(start_elements) > 0
 
@@ -144,9 +149,9 @@ async def test_multiple_async_calls_concurrently(sample_html: str) -> None:
         async_scraper.xpath(sample_html, "//a[@href]"),
         async_scraper.parse(sample_html),
     )
-    
+
     items, links, doc = results
-    
+
     assert len(items) == 2
     assert len(links) == 2
     assert isinstance(doc, Document)

@@ -38,7 +38,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python -m pip install --upgrade pip
-          python -m pip install maturin pytest
+          python -m pip install maturin pytest pytest-asyncio
 
       - name: Build extension module
         run: |
@@ -48,4 +48,4 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          pytest tests/test_scraper.py
+          pytest tests/

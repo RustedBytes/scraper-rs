@@ -13,7 +13,6 @@ async def parse(
     max_size_bytes: int | None = ...,
     truncate_on_limit: bool = False,
 ) -> Document: ...
-
 async def select(
     html: str,
     css: str,
@@ -21,7 +20,6 @@ async def select(
     max_size_bytes: int | None = ...,
     truncate_on_limit: bool = False,
 ) -> list[Element]: ...
-
 async def xpath(
     html: str,
     expr: str,

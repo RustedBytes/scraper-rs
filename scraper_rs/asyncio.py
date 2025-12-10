@@ -24,14 +24,14 @@ from . import xpath as _xpath
 
 async def parse(html: str, **kwargs) -> "Document":
     """Parse HTML asynchronously.
-    
+
     Note: Due to PyO3 limitations, the Document is created in the current thread
     but yields control to the event loop to avoid blocking.
-    
+
     Args:
         html: The HTML string to parse
         **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-    
+
     Returns:
         A Document object
     """
@@ -43,14 +43,14 @@ async def parse(html: str, **kwargs) -> "Document":
 
 async def select(html: str, css: str, **kwargs) -> list["Element"]:
     """Select elements by CSS selector asynchronously.
-    
+
     This function runs in a thread pool to avoid blocking the event loop.
-    
+
     Args:
         html: The HTML string to parse
         css: CSS selector string
         **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-    
+
     Returns:
         A list of Element objects matching the CSS selector
     """
@@ -59,14 +59,14 @@ async def select(html: str, css: str, **kwargs) -> list["Element"]:
 
 async def xpath(html: str, expr: str, **kwargs) -> list["Element"]:
     """Select elements by XPath expression asynchronously.
-    
+
     This function runs in a thread pool to avoid blocking the event loop.
-    
+
     Args:
         html: The HTML string to parse
         expr: XPath expression string
         **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-    
+
     Returns:
         A list of Element objects matching the XPath expression
     """

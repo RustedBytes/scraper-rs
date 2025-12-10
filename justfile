@@ -29,11 +29,14 @@ install-wheel: build
     uv pip install target/wheels/scraper_rust-*.whl
 
 test:
-    uv run pytest tests/test_scraper.py
+    uv run pytest tests/
 
 fmt:
     cargo fmt --all
     uv run ruff format
+
+lint:
+    cargo clippy --all-targets --all-features -- -D warnings
 
 clean:
     rm -rf target
