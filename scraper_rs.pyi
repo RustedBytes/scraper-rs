@@ -30,11 +30,19 @@ class Document:
     text: str
 
     def __init__(
-        self, html: str, *, max_size_bytes: int | None = ..., truncate_on_limit: bool = False
+        self,
+        html: str,
+        *,
+        max_size_bytes: int | None = ...,
+        truncate_on_limit: bool = False,
     ) -> None: ...
     @classmethod
     def from_html(
-        cls, html: str, *, max_size_bytes: int | None = ..., truncate_on_limit: bool = False
+        cls,
+        html: str,
+        *,
+        max_size_bytes: int | None = ...,
+        truncate_on_limit: bool = False,
     ) -> Document: ...
     def select(self, css: str) -> list[Element]: ...
     def select_first(self, css: str) -> Element | None: ...
