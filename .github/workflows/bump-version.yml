@@ -72,3 +72,4 @@ jobs:
           else
             git commit -m "Bump version to ${VERSION}"
           fi
+          git push origin HEAD
