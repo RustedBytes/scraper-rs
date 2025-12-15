@@ -34,15 +34,8 @@ jobs:
           args: --release --strip --out dist
           manylinux: auto
 
-      - name: Build wheels (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --strip --out dist
-
-      - name: Build wheels (macOS)
-        if: matrix.os == 'macos-latest'
+      - name: Build wheels (Windows/macOS)
+        if: matrix.os == 'windows-latest' || matrix.os == 'macos-latest'
         uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -104,7 +97,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
-          pattern: '*'
+          pattern: 'wheels-*'
+          merge-multiple: true
+
+      - name: Download sdist artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: 'sdist'
           merge-multiple: true
 
       - name: Publish to PyPI
