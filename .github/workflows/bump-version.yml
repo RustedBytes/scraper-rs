@@ -25,21 +25,44 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Update version in Cargo.toml
+      - name: Validate version format
         run: |
-          sed -i "s/^version = \".*\"/version = \"${{ github.event.inputs.version }}\"/" Cargo.toml
+          if ! echo "${{ github.event.inputs.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$'; then
+            echo "Error: Version must be in format X.Y.Z or X.Y.Z-suffix (e.g., 0.2.15 or 1.0.0-alpha1)"
+            exit 1
+          fi
+
+      - name: Update version in Cargo.toml
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
 
       - name: Update version in pyproject.toml
+        env:
+          VERSION: ${{ github.event.inputs.version }}
         run: |
-          sed -i "s/^version = \".*\"/version = \"${{ github.event.inputs.version }}\"/" pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
 
       - name: Commit version changes
+        env:
+          VERSION: ${{ github.event.inputs.version }}
         run: |
           git add Cargo.toml pyproject.toml
-          git commit -m "Bump version to ${{ github.event.inputs.version }}"
+          if git diff --staged --quiet; then
+            echo "No changes to commit, version is already ${VERSION}"
+          else
+            git commit -m "Bump version to ${VERSION}"
+          fi
 
       - name: Create and push tag
+        env:
+          VERSION: ${{ github.event.inputs.version }}
         run: |
-          git tag -a "v${{ github.event.inputs.version }}" -m "Version ${{ github.event.inputs.version }}"
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} already exists, skipping tag creation"
+          else
+            git tag -a "v${VERSION}" -m "Version ${VERSION}"
+          fi
           git push origin HEAD
-          git push origin "v${{ github.event.inputs.version }}"
+          git push origin "v${VERSION}" || echo "Tag v${VERSION} already exists on remote"
