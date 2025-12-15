@@ -72,15 +72,3 @@ jobs:
           else
             git commit -m "Bump version to ${VERSION}"
           fi
-
-      - name: Create and push tag
-        env:
-          VERSION: ${{ github.event.inputs.version }}
-        run: |
-          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-            echo "Tag v${VERSION} already exists, skipping tag creation"
-          else
-            git tag -a "v${VERSION}" -m "Version ${VERSION}"
-          fi
-          git push origin HEAD
-          git push origin "v${VERSION}" || echo "Tag v${VERSION} already exists on remote"
