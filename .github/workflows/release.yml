@@ -1,6 +1,7 @@
 name: Build and Release Wheels
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
