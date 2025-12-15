@@ -20,6 +20,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -44,11 +50,23 @@ jobs:
         run: |
           sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
 
+      - name: Update Cargo.lock
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          cargo update -p scraper-rs
+
+      - name: Update uv.lock
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          uv lock
+
       - name: Commit version changes
         env:
           VERSION: ${{ github.event.inputs.version }}
         run: |
-          git add Cargo.toml pyproject.toml
+          git add Cargo.toml pyproject.toml Cargo.lock uv.lock
           if git diff --staged --quiet; then
             echo "No changes to commit, version is already ${VERSION}"
           else
