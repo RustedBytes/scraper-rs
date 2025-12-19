@@ -319,5 +319,5 @@ See `.github/workflows/release.yml` and `.github/workflows/bump-version.yml`
 - **PyO3 Documentation**: https://pyo3.rs/
 - **scraper crate**: https://docs.rs/scraper/
 - **Maturin Guide**: https://www.maturin.rs/
-- **Project README**: `/home/runner/work/scraper-rs/scraper-rs/README.md`
-- **Example Usage**: `/home/runner/work/scraper-rs/scraper-rs/examples/demo.py`
+- **Project README**: `README.md`
+- **Example Usage**: `examples/demo.py`
