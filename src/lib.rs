@@ -631,7 +631,7 @@ fn select_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
         .copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        let result = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
                 py.detach(|| {
                     let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
@@ -640,9 +640,7 @@ fn select_async(
             })
         })
         .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?;
-        
-        result
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 
@@ -658,7 +656,7 @@ fn select_first_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
         .copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        let result = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
                 py.detach(|| {
                     let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
@@ -667,9 +665,7 @@ fn select_first_async(
             })
         })
         .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?;
-        
-        result
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 
@@ -685,7 +681,7 @@ fn first_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
         .copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        let result = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
                 py.detach(|| {
                     let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
@@ -694,9 +690,7 @@ fn first_async(
             })
         })
         .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?;
-        
-        result
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 
@@ -712,7 +706,7 @@ fn xpath_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
         .copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        let result = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
                 py.detach(|| {
                     let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
@@ -721,9 +715,7 @@ fn xpath_async(
             })
         })
         .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?;
-        
-        result
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 
@@ -739,7 +731,7 @@ fn xpath_first_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
         .copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        let result = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
                 py.detach(|| {
                     let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
@@ -748,9 +740,7 @@ fn xpath_first_async(
             })
         })
         .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?;
-        
-        result
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 
