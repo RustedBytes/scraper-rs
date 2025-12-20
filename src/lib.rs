@@ -740,7 +740,7 @@ fn xpath_first_async(
 }
 
 /// Top-level module initializer.
-#[pymodule]
+#[pymodule(gil_used = false)]
 fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Classes
     m.add_class::<Document>()?;
