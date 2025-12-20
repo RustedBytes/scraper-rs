@@ -628,8 +628,7 @@ fn select_async(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
-    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
-        .copy_context(py)?;
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
@@ -653,8 +652,7 @@ fn select_first_async(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
-    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
-        .copy_context(py)?;
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
@@ -678,8 +676,7 @@ fn first_async(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
-    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
-        .copy_context(py)?;
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
@@ -703,8 +700,7 @@ fn xpath_async(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
-    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
-        .copy_context(py)?;
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
@@ -728,8 +724,7 @@ fn xpath_first_async(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
-    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?
-        .copy_context(py)?;
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
