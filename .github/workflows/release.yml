@@ -56,12 +56,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-free-threaded-wheels:
-    name: Build free-threaded wheels on ${{ matrix.os }}
+    name: Build free-threaded wheels on ${{ matrix.os }} (Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.13t', '3.14t']
 
     steps:
       - name: Checkout repository
@@ -70,7 +71,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14t'
+          python-version: ${{ matrix.python-version }}
           allow-prereleases: true
 
       - name: Build free-threaded wheels (Linux)
@@ -91,7 +92,7 @@ jobs:
       - name: Upload free-threaded wheels as artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: wheels-free-threaded-${{ matrix.os }}
+          name: wheels-free-threaded-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/*.whl
 
       - name: Upload free-threaded wheels to release
