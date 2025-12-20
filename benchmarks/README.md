@@ -34,16 +34,6 @@ Tests are run against three HTML document sizes:
 
 The benchmark also tests concurrent execution of async functions to demonstrate their value in concurrent scenarios.
 
-## CI Integration
-
-Benchmarks run automatically on pull requests that modify:
-- Rust source code (`src/**`)
-- Dependencies (`Cargo.toml`)
-- Benchmark scripts (`benchmarks/**`)
-- The benchmark workflow (`.github/workflows/benchmark.yml`)
-
-You can also trigger benchmarks manually via GitHub Actions workflow dispatch.
-
 ## Interpreting Results
 
 - **Sync functions**: Best for sequential, CPU-bound operations
