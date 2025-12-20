@@ -79,7 +79,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-              args: --release --strip --out dist
+          args: --release --strip --out dist
           manylinux: auto
 
       - name: Build free-threaded wheels (Windows/macOS)
