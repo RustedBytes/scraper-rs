@@ -3,10 +3,8 @@
 This module provides async versions of the main scraper_rs functions,
 allowing them to be used in asyncio applications without blocking the event loop.
 
-Note: The Document class cannot be passed between threads due to PyO3 limitations,
-so parse() executes in the current thread but yields control to the event loop.
-The select() and xpath() functions can run in a thread pool since they return
-only Element objects which are thread-safe.
+The async functions use pyo3-async-runtimes to properly capture the Python event loop
+and execute work in a thread pool while maintaining proper async context.
 """
 
 import asyncio
@@ -16,12 +14,15 @@ if TYPE_CHECKING:
     from . import Document, Element
 
 # Import the synchronous functions from the main module
-# These will be available after the package is built
 from . import Document as _Document
-from . import select as _select
-from . import select_first as _select_first
-from . import xpath as _xpath
-from . import xpath_first as _xpath_first
+# Import the native async functions from the Rust module
+from . import (
+    first_async as _first_async,
+    select_async as _select_async,
+    select_first_async as _select_first_async,
+    xpath_async as _xpath_async,
+    xpath_first_async as _xpath_first_async,
+)
 
 
 async def parse(html: str, **kwargs) -> "Document":
@@ -46,7 +47,8 @@ async def parse(html: str, **kwargs) -> "Document":
 async def select(html: str, css: str, **kwargs) -> list["Element"]:
     """Select elements by CSS selector asynchronously.
 
-    This function runs in a thread pool to avoid blocking the event loop.
+    This function uses pyo3-async-runtimes to run in a thread pool while
+    properly maintaining the Python asyncio context.
 
     Args:
         html: The HTML string to parse
@@ -56,13 +58,14 @@ async def select(html: str, css: str, **kwargs) -> list["Element"]:
     Returns:
         A list of Element objects matching the CSS selector
     """
-    return await asyncio.to_thread(_select, html, css, **kwargs)
+    return await _select_async(html, css, **kwargs)
 
 
 async def select_first(html: str, css: str, **kwargs) -> "Element | None":
     """Select the first element by CSS selector asynchronously.
 
-    This function runs in a thread pool to avoid blocking the event loop.
+    This function uses pyo3-async-runtimes to run in a thread pool while
+    properly maintaining the Python asyncio context.
 
     Args:
         html: The HTML string to parse
@@ -72,13 +75,31 @@ async def select_first(html: str, css: str, **kwargs) -> "Element | None":
     Returns:
         The first Element matching the CSS selector, or None if no match
     """
-    return await asyncio.to_thread(_select_first, html, css, **kwargs)
+    return await _select_first_async(html, css, **kwargs)
+
+
+async def first(html: str, css: str, **kwargs) -> "Element | None":
+    """Alias for select_first - select the first element by CSS selector asynchronously.
+
+    This function uses pyo3-async-runtimes to run in a thread pool while
+    properly maintaining the Python asyncio context.
+
+    Args:
+        html: The HTML string to parse
+        css: CSS selector string
+        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
+
+    Returns:
+        The first Element matching the CSS selector, or None if no match
+    """
+    return await _first_async(html, css, **kwargs)
 
 
 async def xpath(html: str, expr: str, **kwargs) -> list["Element"]:
     """Select elements by XPath expression asynchronously.
 
-    This function runs in a thread pool to avoid blocking the event loop.
+    This function uses pyo3-async-runtimes to run in a thread pool while
+    properly maintaining the Python asyncio context.
 
     Args:
         html: The HTML string to parse
@@ -88,13 +109,14 @@ async def xpath(html: str, expr: str, **kwargs) -> list["Element"]:
     Returns:
         A list of Element objects matching the XPath expression
     """
-    return await asyncio.to_thread(_xpath, html, expr, **kwargs)
+    return await _xpath_async(html, expr, **kwargs)
 
 
 async def xpath_first(html: str, expr: str, **kwargs) -> "Element | None":
     """Select the first element by XPath expression asynchronously.
 
-    This function runs in a thread pool to avoid blocking the event loop.
+    This function uses pyo3-async-runtimes to run in a thread pool while
+    properly maintaining the Python asyncio context.
 
     Args:
         html: The HTML string to parse
@@ -104,4 +126,4 @@ async def xpath_first(html: str, expr: str, **kwargs) -> "Element | None":
     Returns:
         The first Element matching the XPath expression, or None if no match
     """
-    return await asyncio.to_thread(_xpath_first, html, expr, **kwargs)
+    return await _xpath_first_async(html, expr, **kwargs)

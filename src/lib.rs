@@ -617,6 +617,128 @@ fn xpath_first(
     })
 }
 
+// Async versions using pyo3-async-runtimes
+
+#[pyfunction]
+#[pyo3(signature = (html, css, *, max_size_bytes=None, truncate_on_limit=false))]
+fn select_async(
+    py: Python<'_>,
+    html: String,
+    css: String,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| {
+                py.detach(|| {
+                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
+                    doc.select(&css)
+                })
+            })
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
+#[pyfunction]
+#[pyo3(signature = (html, css, *, max_size_bytes=None, truncate_on_limit=false))]
+fn select_first_async(
+    py: Python<'_>,
+    html: String,
+    css: String,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| {
+                py.detach(|| {
+                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
+                    doc.select_first(&css)
+                })
+            })
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
+#[pyfunction]
+#[pyo3(signature = (html, css, *, max_size_bytes=None, truncate_on_limit=false))]
+fn first_async(
+    py: Python<'_>,
+    html: String,
+    css: String,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| {
+                py.detach(|| {
+                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
+                    doc.find(&css)
+                })
+            })
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
+#[pyfunction]
+#[pyo3(signature = (html, expr, *, max_size_bytes=None, truncate_on_limit=false))]
+fn xpath_async(
+    py: Python<'_>,
+    html: String,
+    expr: String,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| {
+                py.detach(|| {
+                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
+                    doc.xpath(&expr)
+                })
+            })
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
+#[pyfunction]
+#[pyo3(signature = (html, expr, *, max_size_bytes=None, truncate_on_limit=false))]
+fn xpath_first_async(
+    py: Python<'_>,
+    html: String,
+    expr: String,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| {
+                py.detach(|| {
+                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
+                    doc.xpath_first(&expr)
+                })
+            })
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
 /// Top-level module initializer.
 #[pymodule]
 fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -631,6 +753,13 @@ fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(first, m)?)?;
     m.add_function(wrap_pyfunction!(xpath, m)?)?;
     m.add_function(wrap_pyfunction!(xpath_first, m)?)?;
+
+    // Async versions
+    m.add_function(wrap_pyfunction!(select_async, m)?)?;
+    m.add_function(wrap_pyfunction!(select_first_async, m)?)?;
+    m.add_function(wrap_pyfunction!(first_async, m)?)?;
+    m.add_function(wrap_pyfunction!(xpath_async, m)?)?;
+    m.add_function(wrap_pyfunction!(xpath_first_async, m)?)?;
 
     // Package metadata
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
