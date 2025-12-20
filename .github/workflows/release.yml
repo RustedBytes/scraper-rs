@@ -74,13 +74,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
 
-      - name: Build free-threaded wheels (Linux)
+      - name: Install zig (for Linux manylinux builds)
+        if: matrix.os == 'ubuntu-latest'
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+
+      - name: Build free-threaded wheels (Linux - using zig for manylinux)
         if: matrix.os == 'ubuntu-latest'
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --strip --out dist
-          manylinux: auto
+          args: --release --strip --out dist --zig
 
       - name: Build free-threaded wheels (Windows/macOS)
         if: matrix.os == 'windows-latest' || matrix.os == 'macos-latest'
@@ -141,7 +146,7 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download all artifacts
+      - name: Download all wheel artifacts
         uses: actions/download-artifact@v7
         with:
           path: dist
@@ -154,6 +159,15 @@ jobs:
           path: dist
           pattern: 'sdist'
           merge-multiple: true
+
+      - name: List all files to be uploaded
+        run: |
+          echo "Files in dist directory:"
+          ls -lah dist/
+          echo "Total wheel files:"
+          ls -1 dist/*.whl | wc -l
+          echo "All wheel files:"
+          ls -1 dist/*.whl
 
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1
