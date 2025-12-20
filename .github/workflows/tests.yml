@@ -45,7 +45,7 @@ jobs:
         run: |
           source .venv/bin/activate
           if [[ "${{ matrix.python-version }}" == "3.13t" || "${{ matrix.python-version }}" == "3.14t" ]]; then
-            maturin develop --release --locked --free-threaded
+            maturin develop --release --locked
           else
             maturin develop --release --locked
           fi
