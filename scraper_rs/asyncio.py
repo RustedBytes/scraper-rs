@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 from . import Document as _Document
 # Import the native async functions from the Rust module
 from . import (
+    first_async as _first_async,
     select_async as _select_async,
     select_first_async as _select_first_async,
     xpath_async as _xpath_async,
@@ -75,6 +76,23 @@ async def select_first(html: str, css: str, **kwargs) -> "Element | None":
         The first Element matching the CSS selector, or None if no match
     """
     return await _select_first_async(html, css, **kwargs)
+
+
+async def first(html: str, css: str, **kwargs) -> "Element | None":
+    """Alias for select_first - select the first element by CSS selector asynchronously.
+
+    This function uses pyo3-async-runtimes to run in a thread pool while
+    properly maintaining the Python asyncio context.
+
+    Args:
+        html: The HTML string to parse
+        css: CSS selector string
+        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
+
+    Returns:
+        The first Element matching the CSS selector, or None if no match
+    """
+    return await _first_async(html, css, **kwargs)
 
 
 async def xpath(html: str, expr: str, **kwargs) -> list["Element"]:
