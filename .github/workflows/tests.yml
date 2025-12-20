@@ -44,7 +44,7 @@ jobs:
       - name: Build extension module
         run: |
           source .venv/bin/activate
-          if [ "${{ matrix.python-version }}" = "3.14t" ]; then
+          if [[ "${{ matrix.python-version }}" == "3.14t" ]]; then
             maturin develop --release --locked --free-threaded
           else
             maturin develop --release --locked
