@@ -78,7 +78,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --strip --out dist
+          args: --release --strip --out dist --free-threaded
           manylinux: auto
 
       - name: Build free-threaded wheels (Windows/macOS)
@@ -86,7 +86,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --strip --out dist
+          args: --release --strip --out dist --free-threaded
 
       - name: Upload free-threaded wheels as artifacts
         uses: actions/upload-artifact@v6
