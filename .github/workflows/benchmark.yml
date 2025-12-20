@@ -1,0 +1,63 @@
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: Python version to use for benchmarks
+        required: false
+        default: "3.12"
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'benchmarks/**'
+      - '.github/workflows/benchmark.yml'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ github.event.inputs.python-version || '3.12' }}
+          cache: pip
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Create virtualenv
+        run: python -m venv .venv
+
+      - name: Install Python dependencies
+        run: |
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install maturin pytest-asyncio
+
+      - name: Build extension module
+        run: |
+          source .venv/bin/activate
+          maturin develop --release --locked
+
+      - name: Run benchmarks
+        run: |
+          source .venv/bin/activate
+          python benchmarks/bench_sync_async.py
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: |
+            benchmarks/*.txt
+            benchmarks/*.log
+          retention-days: 30
