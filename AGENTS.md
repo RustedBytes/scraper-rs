@@ -1,4 +1,4 @@
-# AGENT.md - LLM Development Guide for scraper-rs
+# AGENTS.md - LLM Development Guide for scraper-rs
 
 This file contains essential information for Large Language Models (LLMs) to effectively work with the scraper-rs project.
 
@@ -20,6 +20,8 @@ This file contains essential information for Large Language Models (LLMs) to eff
   - `scraper` v0.25 - HTML parsing and CSS selection
   - `sxd-document` v0.3.2, `sxd-xpath` v0.4.2, `sxd_html` v0.1.2 - XPath support
   - `pyo3` v0.27 with `extension-module` and `abi3-py310` features
+  - `pyo3-async-runtimes` v0.27 with `tokio-runtime` feature
+  - `tokio` v1 (rt, macros) for async wrappers
 - **Python** 3.10+
   - Type annotations and stub files (`scraper_rs.pyi`, `py.typed`)
   - Async support via `asyncio` module
@@ -45,7 +47,7 @@ scraper-rs/
 ├── examples/
 │   ├── demo.py             # Sync usage examples
 │   └── demo_asyncio.py     # Async usage examples
-├── scraper_rs/             # Python package directory (built by maturin)
+├── scraper_rs/             # Python package directory (async wrappers + import glue)
 ├── scraper_rs.pyi          # Type stub file
 ├── py.typed                # PEP 561 marker for type support
 ├── Cargo.toml              # Rust package configuration
@@ -177,6 +179,7 @@ pytest tests/ -v
 
 **`Document`**
 - Constructor: `Document(html: str, max_size_bytes: int = 1GiB, truncate_on_limit: bool = False)`
+- Alternate constructor: `Document.from_html(html, max_size_bytes, truncate_on_limit)`
 - Properties: `.html`, `.text`
 - Methods:
   - `.select(css: str) -> list[Element]` - CSS selection
@@ -206,9 +209,9 @@ pytest tests/ -v
 
 ### Async API
 Module: `scraper_rs.asyncio`
-- All top-level functions available as async versions
-- `parse()` yields to event loop between operations
-- `select()` and `xpath()` run in thread pool
+- `AsyncDocument` and `AsyncElement` wrappers mirror the sync API
+- `parse()` yields to the event loop once before constructing the document
+- `select()` and `xpath()` run in a thread pool via `pyo3-async-runtimes` + `tokio::task::spawn_blocking`
 - Same keyword arguments as sync versions
 
 ## Code Conventions
@@ -243,17 +246,19 @@ Module: `scraper_rs.asyncio`
 2. Add `#[pymethods]` annotation if needed
 3. Update `scraper_rs.pyi` with type signature
 4. Add tests in `tests/test_scraper.py`
-5. Update README.md with usage example
-6. Run `maturin develop` to rebuild
-7. Run `pytest tests/` to verify
+5. If it should be async, update `scraper_rs/asyncio.py` and `scraper_rs/asyncio.pyi`
+6. Update README.md with usage example
+7. Run `maturin develop` to rebuild
+8. Run `pytest tests/` to verify
 
 ### Adding a New Top-Level Function
 1. Add Rust function in `src/lib.rs` with `#[pyfunction]`
 2. Register with `m.add_function(wrap_pyfunction!(function_name, m)?)?` in `scraper_rs` module
 3. Export in `__all__` if applicable
 4. Update `scraper_rs.pyi`
-5. Add tests
-6. Update documentation
+5. Add async wrapper in `scraper_rs/asyncio.py` and `scraper_rs/asyncio.pyi` if needed
+6. Add tests
+7. Update documentation
 
 ### Debugging Build Issues
 - Ensure Rust toolchain is installed: `rustc --version`
@@ -274,7 +279,7 @@ See `.github/workflows/release.yml` and `.github/workflows/bump-version.yml`
 2. **PyO3 limitations**: Not all Rust types can cross the FFI boundary - use owned data
 3. **Size limits**: Always respect `max_size_bytes` to prevent memory issues
 4. **UTF-8 safety**: Truncation must respect character boundaries
-5. **No async in Rust**: Async is Python-only; Rust code is synchronous
+5. **Async wrappers**: Rust exposes async helpers via `pyo3-async-runtimes` + `tokio::task::spawn_blocking`; parsing/selectors remain synchronous
 6. **Single source file**: All Rust code is in `src/lib.rs` (keep it organized)
 7. **Type stubs are critical**: Always update `scraper_rs.pyi` when changing APIs
 8. **Tests are comprehensive**: Follow existing test patterns in `tests/`
@@ -285,6 +290,8 @@ See `.github/workflows/release.yml` and `.github/workflows/bump-version.yml`
 
 ### Rust Dependencies (Cargo.toml)
 - `pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"] }`
+- `pyo3-async-runtimes = { version = "0.27", features = ["tokio-runtime"] }`
+- `tokio = { version = "1", features = ["rt", "macros"] }`
 - `scraper = "0.25"`
 - `sxd-document = "0.3.2"`
 - `sxd-xpath = "0.4.2"`
