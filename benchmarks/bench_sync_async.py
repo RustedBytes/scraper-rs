@@ -66,7 +66,9 @@ LARGE_HTML = """
 )
 
 
-def benchmark_sync(func: Callable, *args: Any, iterations: int = 100, **kwargs: Any) -> float:
+def benchmark_sync(
+    func: Callable, *args: Any, iterations: int = 100, **kwargs: Any
+) -> float:
     """Benchmark a synchronous function."""
     start = time.perf_counter()
     for _ in range(iterations):
@@ -110,7 +112,9 @@ def format_time(seconds: float) -> str:
 def print_result(name: str, time_taken: float, iterations: int = 100) -> None:
     """Print benchmark result."""
     avg_time = time_taken / iterations
-    print(f"  {name:30s}: {format_time(time_taken):>12s} total, {format_time(avg_time):>12s} avg")
+    print(
+        f"  {name:30s}: {format_time(time_taken):>12s} total, {format_time(avg_time):>12s} avg"
+    )
 
 
 async def main() -> None:
@@ -138,7 +142,9 @@ async def main() -> None:
 
     # Sync benchmarks
     print("Synchronous functions:")
-    time_select = benchmark_sync(scraper_rs.select, SMALL_HTML, ".item", iterations=iterations)
+    time_select = benchmark_sync(
+        scraper_rs.select, SMALL_HTML, ".item", iterations=iterations
+    )
     print_result("select", time_select, iterations)
 
     time_select_first = benchmark_sync(
@@ -146,14 +152,21 @@ async def main() -> None:
     )
     print_result("select_first", time_select_first, iterations)
 
-    time_first = benchmark_sync(scraper_rs.first, SMALL_HTML, ".item", iterations=iterations)
+    time_first = benchmark_sync(
+        scraper_rs.first, SMALL_HTML, ".item", iterations=iterations
+    )
     print_result("first", time_first, iterations)
 
-    time_xpath = benchmark_sync(scraper_rs.xpath, SMALL_HTML, "//div[@class='item']", iterations=iterations)
+    time_xpath = benchmark_sync(
+        scraper_rs.xpath, SMALL_HTML, "//div[@class='item']", iterations=iterations
+    )
     print_result("xpath", time_xpath, iterations)
 
     time_xpath_first = benchmark_sync(
-        scraper_rs.xpath_first, SMALL_HTML, "//div[@class='item']", iterations=iterations
+        scraper_rs.xpath_first,
+        SMALL_HTML,
+        "//div[@class='item']",
+        iterations=iterations,
     )
     print_result("xpath_first", time_xpath_first, iterations)
 
@@ -180,7 +193,10 @@ async def main() -> None:
     print_result("async xpath", time_async_xpath, iterations)
 
     time_async_xpath_first = await benchmark_async(
-        async_scraper.xpath_first, SMALL_HTML, "//div[@class='item']", iterations=iterations
+        async_scraper.xpath_first,
+        SMALL_HTML,
+        "//div[@class='item']",
+        iterations=iterations,
     )
     print_result("async xpath_first", time_async_xpath_first, iterations)
 
@@ -192,7 +208,10 @@ async def main() -> None:
     print_result("concurrent select", time_concurrent_select, concurrent_tasks)
 
     time_concurrent_xpath = await benchmark_async_concurrent(
-        async_scraper.xpath, SMALL_HTML, "//div[@class='item']", concurrency=concurrent_tasks
+        async_scraper.xpath,
+        SMALL_HTML,
+        "//div[@class='item']",
+        concurrency=concurrent_tasks,
     )
     print_result("concurrent xpath", time_concurrent_xpath, concurrent_tasks)
 
@@ -203,10 +222,14 @@ async def main() -> None:
     print("-" * 80)
 
     print("Synchronous functions:")
-    time_select_med = benchmark_sync(scraper_rs.select, MEDIUM_HTML, ".item", iterations=iterations)
+    time_select_med = benchmark_sync(
+        scraper_rs.select, MEDIUM_HTML, ".item", iterations=iterations
+    )
     print_result("select", time_select_med, iterations)
 
-    time_xpath_med = benchmark_sync(scraper_rs.xpath, MEDIUM_HTML, "//div[@class='item']", iterations=iterations)
+    time_xpath_med = benchmark_sync(
+        scraper_rs.xpath, MEDIUM_HTML, "//div[@class='item']", iterations=iterations
+    )
     print_result("xpath", time_xpath_med, iterations)
 
     print("\nAsynchronous functions (sequential):")
@@ -235,11 +258,16 @@ async def main() -> None:
     iterations_large = 50  # Fewer iterations for large HTML
 
     print("Synchronous functions:")
-    time_select_large = benchmark_sync(scraper_rs.select, LARGE_HTML, ".item", iterations=iterations_large)
+    time_select_large = benchmark_sync(
+        scraper_rs.select, LARGE_HTML, ".item", iterations=iterations_large
+    )
     print_result("select", time_select_large, iterations_large)
 
     time_xpath_large = benchmark_sync(
-        scraper_rs.xpath, LARGE_HTML, "//div[@class='item']", iterations=iterations_large
+        scraper_rs.xpath,
+        LARGE_HTML,
+        "//div[@class='item']",
+        iterations=iterations_large,
     )
     print_result("xpath", time_xpath_large, iterations_large)
 
@@ -250,7 +278,10 @@ async def main() -> None:
     print_result("async select", time_async_select_large, iterations_large)
 
     time_async_xpath_large = await benchmark_async(
-        async_scraper.xpath, LARGE_HTML, "//div[@class='item']", iterations=iterations_large
+        async_scraper.xpath,
+        LARGE_HTML,
+        "//div[@class='item']",
+        iterations=iterations_large,
     )
     print_result("async xpath", time_async_xpath_large, iterations_large)
 
@@ -268,7 +299,9 @@ async def main() -> None:
     print("Note: Async functions show their value in concurrent scenarios where")
     print("      multiple operations can be performed simultaneously without blocking.")
     print("      For CPU-bound operations like HTML parsing, sync functions may be")
-    print("      faster for sequential execution, but async allows better responsiveness")
+    print(
+        "      faster for sequential execution, but async allows better responsiveness"
+    )
     print("      in I/O-bound applications.")
     print()
 

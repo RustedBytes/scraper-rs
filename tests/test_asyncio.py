@@ -25,7 +25,8 @@ async def test_async_parse(sample_html: str) -> None:
     """Test the async parse function."""
     doc = await async_scraper.parse(sample_html)
 
-    assert isinstance(doc, Document)
+    assert isinstance(doc, async_scraper.AsyncDocument)
+    assert isinstance(doc.document, Document)
     assert doc.text == "First Second"
     assert doc.html == sample_html
 
@@ -36,7 +37,8 @@ async def test_async_select(sample_html: str) -> None:
     items = await async_scraper.select(sample_html, ".item")
 
     assert len(items) == 2
-    assert all(isinstance(item, Element) for item in items)
+    assert all(isinstance(item, async_scraper.AsyncElement) for item in items)
+    assert all(isinstance(item.element, Element) for item in items)
     assert items[0].tag == "div"
     assert items[0].text == "First"
     assert items[0].attr("data-id") == "1"
@@ -50,7 +52,8 @@ async def test_async_xpath(sample_html: str) -> None:
     links = await async_scraper.xpath(sample_html, "//a[@href]")
 
     assert len(links) == 2
-    assert all(isinstance(link, Element) for link in links)
+    assert all(isinstance(link, async_scraper.AsyncElement) for link in links)
+    assert all(isinstance(link.element, Element) for link in links)
     assert links[0].tag == "a"
     assert links[0].text == "First"
     assert links[0].attr("href") == "/a"
@@ -121,8 +124,8 @@ async def test_async_with_truncate_on_limit() -> None:
     doc = await async_scraper.parse(
         large_html, max_size_bytes=small_limit, truncate_on_limit=True
     )
-    assert doc.find(".start") is not None
-    assert doc.find(".end") is None
+    assert await doc.find(".start") is not None
+    assert await doc.find(".end") is None
 
     # Test select with truncate_on_limit
     items = await async_scraper.select(
@@ -147,7 +150,8 @@ async def test_async_xpath_first(sample_html: str) -> None:
     first_link = await async_scraper.xpath_first(sample_html, "//a[@href]")
 
     assert first_link is not None
-    assert isinstance(first_link, Element)
+    assert isinstance(first_link, async_scraper.AsyncElement)
+    assert isinstance(first_link.element, Element)
     assert first_link.tag == "a"
     assert first_link.text == "First"
     assert first_link.attr("href") == "/a"
@@ -189,7 +193,8 @@ async def test_async_select_first(sample_html: str) -> None:
     first_item = await async_scraper.select_first(sample_html, ".item")
 
     assert first_item is not None
-    assert isinstance(first_item, Element)
+    assert isinstance(first_item, async_scraper.AsyncElement)
+    assert isinstance(first_item.element, Element)
     assert first_item.tag == "div"
     assert first_item.text == "First"
     assert first_item.attr("data-id") == "1"
@@ -238,5 +243,17 @@ async def test_multiple_async_calls_concurrently(sample_html: str) -> None:
 
     assert len(items) == 2
     assert len(links) == 2
-    assert isinstance(doc, Document)
+    assert isinstance(doc, async_scraper.AsyncDocument)
     assert doc.text == "First Second"
+
+
+@pytest.mark.asyncio
+async def test_async_nested_selectors(sample_html: str) -> None:
+    """Test async selectors on sub-elements."""
+    doc = await async_scraper.parse(sample_html)
+    items = await doc.select(".item")
+    first_link = await items[0].select_first("a[href]")
+
+    assert first_link is not None
+    assert first_link.text == "First"
+    assert first_link.attr("href") == "/a"

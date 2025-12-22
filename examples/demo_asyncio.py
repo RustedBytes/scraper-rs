@@ -20,6 +20,10 @@ async def main():
     print("Example 1: Async parse")
     doc = await async_scraper.parse(html)
     print(f"  Document text: {doc.text}")
+    items = await doc.select(".item")
+    first_link = await items[0].select_first("a[href]")
+    if first_link:
+        print(f"  First link (nested): {first_link.text} -> {first_link.attr('href')}")
     print()
 
     # Example 2: Select elements by CSS selector asynchronously

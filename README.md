@@ -46,7 +46,7 @@ For a runnable sample, see `examples/demo.py`.
 
 ### Async usage
 
-The `scraper_rs.asyncio` module wraps the top-level helpers to keep the event loop responsive. `parse` yields to the event loop between operations, while `select`/`xpath` run in a thread pool:
+The `scraper_rs.asyncio` module wraps the top-level helpers to keep the event loop responsive. `parse` yields to the event loop between operations, while `select`/`xpath` run in a thread pool. Parsed documents and elements are wrapped with awaitable selector methods for nested queries:
 
 ```py
 import asyncio
@@ -57,8 +57,10 @@ html = "<div class='item'><a href='/a'>First</a></div>"
 
 async def main():
     doc = await scraping_async.parse(html)
+    items = await doc.select(".item")
+    first_link = await items[0].select_first("a[href]")
     links = await scraping_async.select(html, "a[href]")
-    print(doc.select_first(".item").text)  # First
+    print(first_link.text)  # First
     print([link.attr("href") for link in links])  # ["/a"]
 
 
@@ -66,6 +68,7 @@ asyncio.run(main())
 ```
 
 All async functions accept the same keyword arguments as their sync counterparts (`max_size_bytes`, `truncate_on_limit`, etc.).
+Async wrappers expose the underlying sync objects via `.document` and `.element` if you need direct access.
 
 ### Large documents and memory safety
 

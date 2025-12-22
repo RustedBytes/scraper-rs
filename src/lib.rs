@@ -739,6 +739,76 @@ fn xpath_first_async(
     })
 }
 
+#[pyfunction]
+#[pyo3(signature = (html, css))]
+fn _select_fragment_async(py: Python<'_>, html: String, css: String) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| py.detach(|| select_fragment(&html, &css)))
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
+#[pyfunction]
+#[pyo3(signature = (html, css))]
+fn _select_first_fragment_async(
+    py: Python<'_>,
+    html: String,
+    css: String,
+) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| {
+                py.detach(|| {
+                    let elements = select_fragment(&html, &css)?;
+                    Ok(elements.into_iter().next())
+                })
+            })
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
+#[pyfunction]
+#[pyo3(signature = (html, expr))]
+fn _xpath_fragment_async(py: Python<'_>, html: String, expr: String) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| py.detach(|| evaluate_fragment_xpath(&html, &expr)))
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
+#[pyfunction]
+#[pyo3(signature = (html, expr))]
+fn _xpath_first_fragment_async(
+    py: Python<'_>,
+    html: String,
+    expr: String,
+) -> PyResult<Bound<'_, PyAny>> {
+    let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        tokio::task::spawn_blocking(move || {
+            Python::attach(|py| {
+                py.detach(|| {
+                    let elements = evaluate_fragment_xpath(&html, &expr)?;
+                    Ok(elements.into_iter().next())
+                })
+            })
+        })
+        .await
+        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+    })
+}
+
 /// Top-level module initializer.
 #[pymodule(gil_used = false)]
 fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -760,6 +830,10 @@ fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(first_async, m)?)?;
     m.add_function(wrap_pyfunction!(xpath_async, m)?)?;
     m.add_function(wrap_pyfunction!(xpath_first_async, m)?)?;
+    m.add_function(wrap_pyfunction!(_select_fragment_async, m)?)?;
+    m.add_function(wrap_pyfunction!(_select_first_fragment_async, m)?)?;
+    m.add_function(wrap_pyfunction!(_xpath_fragment_async, m)?)?;
+    m.add_function(wrap_pyfunction!(_xpath_first_fragment_async, m)?)?;
 
     // Package metadata
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
