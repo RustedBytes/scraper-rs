@@ -12,7 +12,7 @@ pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"] }
 pyo3-async-runtimes = { version = "0.27", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["rt", "macros"] }
 
-scraper = "0.25"
+scraper = { version = "0.25", features = ["atomic"] }
 
 sxd-document = "0.3.2"
 sxd-xpath = "0.4.2"

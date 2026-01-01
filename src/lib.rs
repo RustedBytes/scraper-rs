@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -56,13 +57,23 @@ fn truncate_for_repr(s: &str, max_chars: usize) -> String {
 /// This is a *snapshot* of an element: it stores tag, text, inner HTML
 /// and attributes, all as owned data, so there are no lifetime issues
 /// when used from Python.
+///
+/// Properties are computed lazily on first access for better performance.
+///
+/// Note: This struct is NOT Clone because lazy fields use Mutex for
+/// thread-safe interior mutability (required for async support).
+/// If cloning is needed, use to_dict() and reconstruct.
 #[pyclass(module = "scraper_rs")]
-#[derive(Clone)]
 pub struct Element {
     tag: String,
-    text: String,
     inner_html: String,
-    attrs: HashMap<String, String>,
+    // Lazy-computed fields stored in Mutex for thread-safe interior mutability.
+    // Mutex is used instead of RefCell to allow Send + Sync for async operations.
+    text: Mutex<Option<String>>,
+    attrs: Mutex<Option<HashMap<String, String>>>,
+    // Store raw HTML element data for nested selections and lazy computation.
+    // This avoids re-parsing when only specific properties are accessed.
+    element_html: String,
 }
 
 #[pymethods]
@@ -75,8 +86,29 @@ impl Element {
 
     /// Normalized text content of the element.
     #[getter]
-    pub fn text(&self) -> &str {
-        &self.text
+    pub fn text(&self) -> String {
+        // Check if already computed
+        let mut text_lock = self.text.lock().expect("Mutex poisoned");
+        if let Some(ref text) = *text_lock {
+            return text.clone();
+        }
+
+        // Compute text by parsing element_html and normalizing whitespace.
+        // Note: This approach requires parsing and string allocations,
+        // but is only done once per element and cached.
+        let fragment = Html::parse_fragment(&self.element_html);
+        let text = fragment
+            .root_element()
+            .text()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        // Cache the result
+        *text_lock = Some(text.clone());
+        text
     }
 
     /// Inner HTML of the element (children only, not the outer tag).
@@ -88,17 +120,42 @@ impl Element {
     /// Mapping of HTML attributes, e.g. {"href": "...", "class": "..."}.
     #[getter]
     pub fn attrs(&self) -> HashMap<String, String> {
-        self.attrs.clone()
+        // Check if already computed
+        let mut attrs_lock = self.attrs.lock().expect("Mutex poisoned");
+        if let Some(ref attrs) = *attrs_lock {
+            return attrs.clone();
+        }
+
+        // Compute attrs by parsing element_html.
+        // The element_html contains the full outer element, so we parse it
+        // and extract attributes from the first element node.
+        let fragment = Html::parse_fragment(&self.element_html);
+        let mut attrs = HashMap::new();
+
+        // Find the first element node (skipping text nodes, comments, etc.)
+        // This is valid because element_html is the serialized HTML of a single element.
+        for element_ref in fragment.root_element().children() {
+            if let Some(element) = element_ref.value().as_element() {
+                for (name, value) in element.attrs() {
+                    attrs.insert(name.to_string(), value.to_string());
+                }
+                break; // Found the element, stop searching
+            }
+        }
+
+        // Cache the result
+        *attrs_lock = Some(attrs.clone());
+        attrs
     }
 
     /// Return the value of a single attribute, or None if it doesn't exist.
     pub fn attr(&self, name: &str) -> Option<String> {
-        self.attrs.get(name).cloned()
+        self.attrs().get(name).cloned()
     }
 
     /// Convenience: behave like dict.get(key, default).
     pub fn get(&self, name: &str, default: Option<String>) -> Option<String> {
-        self.attrs.get(name).cloned().or(default)
+        self.attrs().get(name).cloned().or(default)
     }
 
     /// Select elements inside this element's inner HTML using a CSS selector.
@@ -147,15 +204,16 @@ impl Element {
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("tag", &self.tag)?;
-        dict.set_item("text", &self.text)?;
+        dict.set_item("text", self.text())?;
         dict.set_item("html", &self.inner_html)?;
-        dict.set_item("attrs", &self.attrs)?;
+        dict.set_item("attrs", self.attrs())?;
         Ok(dict.into())
     }
 
     /// Representation of the element for debugging.
     fn __repr__(&self) -> String {
-        let text_preview = truncate_for_repr(self.text.trim(), 40);
+        let text_str = self.text();
+        let text_preview = truncate_for_repr(text_str.trim(), 40);
         format!("<Element tag='{}' text={}>", self.tag, text_preview)
     }
 }
@@ -163,27 +221,17 @@ impl Element {
 /// Convert a scraper ElementRef into our owned Element snapshot.
 fn snapshot_element(el: ElementRef<'_>) -> Element {
     let tag = el.value().name().to_string();
-
-    let text = el
-        .text()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-
     let inner_html = el.inner_html();
 
-    let mut attrs = HashMap::new();
-    for (name, value) in el.value().attrs() {
-        attrs.insert(name.to_string(), value.to_string());
-    }
+    // Store the full element HTML for lazy computation and nested selections
+    let element_html = el.html();
 
     Element {
         tag,
-        text,
         inner_html,
-        attrs,
+        element_html,
+        text: Mutex::new(None),
+        attrs: Mutex::new(None),
     }
 }
 
@@ -196,10 +244,6 @@ fn select_fragment(html: &str, css: &str) -> PyResult<Vec<Element>> {
     let selector = parse_selector(css)?;
     let fragment = Html::parse_fragment(html);
     Ok(fragment.select(&selector).map(snapshot_element).collect())
-}
-
-fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn escape_html(value: &str) -> String {
@@ -252,20 +296,10 @@ fn serialize_children(node: XPathNode<'_>) -> String {
     buf
 }
 
-fn collect_text_nodes(node: XPathNode<'_>, out: &mut Vec<String>) {
-    if let Some(text) = node.text() {
-        out.push(text.text().to_string());
-    }
-
-    for child in node.children() {
-        collect_text_nodes(child, out);
-    }
-}
-
-fn text_from_node(node: XPathNode<'_>) -> String {
-    let mut parts = Vec::new();
-    collect_text_nodes(node, &mut parts);
-    normalize_whitespace(&parts.join(" "))
+fn serialize_element(node: XPathNode<'_>) -> String {
+    let mut buf = String::new();
+    serialize_node_into(&mut buf, node);
+    buf
 }
 
 fn snapshot_xpath_element(node: XPathNode<'_>) -> PyResult<Element> {
@@ -274,22 +308,15 @@ fn snapshot_xpath_element(node: XPathNode<'_>) -> PyResult<Element> {
     })?;
 
     let tag = element.name().local_part().to_string();
-    let text = text_from_node(node);
     let inner_html = serialize_children(node);
-
-    let mut attrs = HashMap::new();
-    for attr in element.attributes().iter() {
-        attrs.insert(
-            attr.name().local_part().to_string(),
-            attr.value().to_string(),
-        );
-    }
+    let element_html = serialize_element(node);
 
     Ok(Element {
         tag,
-        text,
         inner_html,
-        attrs,
+        element_html,
+        text: Mutex::new(None),
+        attrs: Mutex::new(None),
     })
 }
 
@@ -363,7 +390,7 @@ fn evaluate_fragment_xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
 pub struct Document {
     raw_html: String,
     html: Html,
-    xpath_package: sxd_document::Package,
+    xpath_package: Mutex<Option<sxd_document::Package>>,
     closed: bool,
 }
 
@@ -376,16 +403,36 @@ impl Document {
         let max_size_bytes = effective_max_size(max_size_bytes);
         let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
 
-        // Parse using the Cow reference, then convert to owned String
-        let xpath_package = sxd_html::parse_html(html_to_parse.as_ref());
+        // Only parse with html5ever (for CSS selectors)
+        // XPath parsing will be done lazily when first needed
         let html_parsed = Html::parse_document(html_to_parse.as_ref());
 
         Ok(Self {
             raw_html: html_to_parse.into_owned(),
             html: html_parsed,
-            xpath_package,
+            xpath_package: Mutex::new(None),
             closed: false,
         })
+    }
+
+    /// Get or initialize the XPath package lazily.
+    ///
+    /// Panics if the mutex is poisoned (only happens if a panic occurred
+    /// while holding the lock, which should not happen in normal operation).
+    fn ensure_xpath_package(&self) -> std::sync::MutexGuard<'_, Option<sxd_document::Package>> {
+        let mut package_lock = self
+            .xpath_package
+            .lock()
+            .expect("XPath package mutex poisoned");
+
+        // Check if already initialized
+        if package_lock.is_none() {
+            // Parse HTML for XPath support
+            let package = sxd_html::parse_html(&self.raw_html);
+            *package_lock = Some(package);
+        }
+
+        package_lock
     }
 
     /// Drop all DOM allocations and shrink owned strings.
@@ -397,7 +444,11 @@ impl Document {
         self.raw_html.clear();
         self.raw_html.shrink_to_fit();
         self.html = Html::parse_document("");
-        self.xpath_package = sxd_html::parse_html("");
+        // Mutex should never be poisoned here, but use expect for better error message
+        *self
+            .xpath_package
+            .lock()
+            .expect("XPath package mutex poisoned") = None;
         self.closed = true;
     }
 }
@@ -490,7 +541,12 @@ impl Document {
     ///
     /// The expression must return element nodes; attribute/text results are not supported.
     pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
-        let document = self.xpath_package.as_document();
+        let package_lock = self.ensure_xpath_package();
+        // Safe to unwrap: ensure_xpath_package guarantees Some after returning
+        let package = package_lock
+            .as_ref()
+            .expect("XPath package should be initialized");
+        let document = package.as_document();
         evaluate_xpath_elements(document.root().into(), expr)
     }
 
