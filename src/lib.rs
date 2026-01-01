@@ -59,14 +59,20 @@ fn truncate_for_repr(s: &str, max_chars: usize) -> String {
 /// when used from Python.
 ///
 /// Properties are computed lazily on first access for better performance.
+///
+/// Note: This struct is NOT Clone because lazy fields use Mutex for
+/// thread-safe interior mutability (required for async support).
+/// If cloning is needed, use to_dict() and reconstruct.
 #[pyclass(module = "scraper_rs")]
 pub struct Element {
     tag: String,
     inner_html: String,
-    // Lazy-computed fields stored in Mutex for thread-safe interior mutability
+    // Lazy-computed fields stored in Mutex for thread-safe interior mutability.
+    // Mutex is used instead of RefCell to allow Send + Sync for async operations.
     text: Mutex<Option<String>>,
     attrs: Mutex<Option<HashMap<String, String>>>,
-    // Store raw HTML element data for nested selections
+    // Store raw HTML element data for nested selections and lazy computation.
+    // This avoids re-parsing when only specific properties are accessed.
     element_html: String,
 }
 
@@ -82,12 +88,14 @@ impl Element {
     #[getter]
     pub fn text(&self) -> String {
         // Check if already computed
-        let mut text_lock = self.text.lock().unwrap();
+        let mut text_lock = self.text.lock().expect("Mutex poisoned");
         if let Some(ref text) = *text_lock {
             return text.clone();
         }
 
-        // Compute text by parsing inner_html
+        // Compute text by parsing element_html and normalizing whitespace.
+        // Note: This approach requires parsing and string allocations,
+        // but is only done once per element and cached.
         let fragment = Html::parse_fragment(&self.element_html);
         let text = fragment
             .root_element()
@@ -113,22 +121,25 @@ impl Element {
     #[getter]
     pub fn attrs(&self) -> HashMap<String, String> {
         // Check if already computed
-        let mut attrs_lock = self.attrs.lock().unwrap();
+        let mut attrs_lock = self.attrs.lock().expect("Mutex poisoned");
         if let Some(ref attrs) = *attrs_lock {
             return attrs.clone();
         }
 
-        // Compute attrs by parsing element_html
+        // Compute attrs by parsing element_html.
+        // The element_html contains the full outer element, so we parse it
+        // and extract attributes from the first element node.
         let fragment = Html::parse_fragment(&self.element_html);
         let mut attrs = HashMap::new();
 
-        // Get the first child element
+        // Find the first element node (skipping text nodes, comments, etc.)
+        // This is valid because element_html is the serialized HTML of a single element.
         for element_ref in fragment.root_element().children() {
             if let Some(element) = element_ref.value().as_element() {
                 for (name, value) in element.attrs() {
                     attrs.insert(name.to_string(), value.to_string());
                 }
-                break; // Only process the first element
+                break; // Found the element, stop searching
             }
         }
 
@@ -404,9 +415,15 @@ impl Document {
         })
     }
 
-    /// Get or initialize the XPath package lazily
+    /// Get or initialize the XPath package lazily.
+    ///
+    /// Panics if the mutex is poisoned (only happens if a panic occurred
+    /// while holding the lock, which should not happen in normal operation).
     fn ensure_xpath_package(&self) -> std::sync::MutexGuard<'_, Option<sxd_document::Package>> {
-        let mut package_lock = self.xpath_package.lock().unwrap();
+        let mut package_lock = self
+            .xpath_package
+            .lock()
+            .expect("XPath package mutex poisoned");
 
         // Check if already initialized
         if package_lock.is_none() {
@@ -427,7 +444,11 @@ impl Document {
         self.raw_html.clear();
         self.raw_html.shrink_to_fit();
         self.html = Html::parse_document("");
-        *self.xpath_package.lock().unwrap() = None;
+        // Mutex should never be poisoned here, but use expect for better error message
+        *self
+            .xpath_package
+            .lock()
+            .expect("XPath package mutex poisoned") = None;
         self.closed = true;
     }
 }
@@ -521,7 +542,10 @@ impl Document {
     /// The expression must return element nodes; attribute/text results are not supported.
     pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
         let package_lock = self.ensure_xpath_package();
-        let package = package_lock.as_ref().unwrap();
+        // Safe to unwrap: ensure_xpath_package guarantees Some after returning
+        let package = package_lock
+            .as_ref()
+            .expect("XPath package should be initialized");
         let document = package.as_document();
         evaluate_xpath_elements(document.root().into(), expr)
     }
