@@ -12,10 +12,22 @@ Build the package in release mode:
 maturin develop --release
 ```
 
+For markupever comparison, also install markupever:
+
+```bash
+pip install markupever
+```
+
 ### Run the sync vs async benchmark
 
 ```bash
 python benchmarks/bench_sync_async.py
+```
+
+### Run the markupever comparison benchmark
+
+```bash
+python benchmarks/bench_vs_markupever.py
 ```
 
 ## Benchmark Scripts
@@ -34,6 +46,22 @@ Tests are run against three HTML document sizes:
 
 The benchmark also tests concurrent execution of async functions to demonstrate their value in concurrent scenarios.
 
+### bench_vs_markupever.py
+
+Compares scraper-rs performance against [markupever](https://github.com/awolverp/markupever), another Python HTML parsing library based on html5ever.
+
+Operations benchmarked:
+- **parse**: Document parsing
+- **css_select**: CSS selection with `.select()`
+- **css_select_first**: First match with `.select_first()` or `.select_one()`
+
+Tests are run against three HTML document sizes:
+- **Small**: ~200 bytes, 2 items
+- **Medium**: ~5KB, 100 items
+- **Large**: ~50KB, 1000 items
+
+The benchmark shows the ratio between scraper-rs and markupever for each operation. Lower ratios indicate better relative performance.
+
 ## Interpreting Results
 
 - **Sync functions**: Best for sequential, CPU-bound operations
@@ -41,6 +69,13 @@ The benchmark also tests concurrent execution of async functions to demonstrate 
 - **Async functions (concurrent)**: Show significant speedup when running multiple operations simultaneously
 
 Note that for CPU-bound operations like HTML parsing, synchronous functions may be faster for sequential execution. However, async functions enable better responsiveness in I/O-bound applications and allow concurrent operations without blocking.
+
+## Recent Performance Improvements
+
+After optimizations (lazy XPath parsing, lazy property computation, atomic feature):
+- scraper-rs is now **1.6-3.4x** faster than before
+- scraper-rs is **1.8-3.4x slower** than markupever (down from 9-20x slower)
+- The performance gap has been significantly reduced while maintaining full XPath support
 
 ## Test run
 
