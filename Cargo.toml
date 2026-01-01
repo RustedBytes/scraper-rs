@@ -1,6 +1,6 @@
 [package]
 name = "scraper-rs"
-version = "0.2.22"
+version = "0.2.27"
 edition = "2024"
 
 [lib]
@@ -19,6 +19,8 @@ sxd-xpath = "0.4.2"
 sxd_html = "0.1.2"
 
 [profile.release]
-lto = true
+lto = "fat"
 codegen-units = 1
-opt-level = "z"
+opt-level = 3
+panic = "abort"
+strip = true

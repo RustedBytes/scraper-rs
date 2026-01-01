@@ -633,7 +633,7 @@ dependencies = [
 
 [[package]]
 name = "scraper-rs"
-version = "0.2.22"
+version = "0.2.27"
 dependencies = [
  "pyo3",
  "pyo3-async-runtimes",

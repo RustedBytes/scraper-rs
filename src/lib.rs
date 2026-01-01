@@ -1,15 +1,65 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::cell::RefCell;
+use std::collections::{HashMap, VecDeque, hash_map::Entry};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
 use scraper::{Html, Selector, element_ref::ElementRef};
-use sxd_xpath::{Context, Factory, Value, nodeset::Node as XPathNode};
+use sxd_xpath::{Context, Factory, Value, XPath, nodeset::Node as XPathNode};
 
 const DEFAULT_MAX_PARSE_BYTES: usize = 1_073_741_824; // 1 GiB
+const SELECTOR_CACHE_CAPACITY: usize = 256;
+const XPATH_CACHE_CAPACITY: usize = 128;
+
+struct FixedCache<T> {
+    map: HashMap<String, T>,
+    order: VecDeque<String>,
+    capacity: usize,
+}
+
+impl<T> FixedCache<T> {
+    fn new(capacity: usize) -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+            capacity,
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<&T> {
+        self.map.get(key)
+    }
+
+    fn insert(&mut self, key: String, value: T) {
+        let key = match self.map.entry(key) {
+            Entry::Occupied(mut entry) => {
+                entry.insert(value);
+                return;
+            }
+            Entry::Vacant(entry) => entry.into_key(),
+        };
+
+        if self.map.len() >= self.capacity
+            && let Some(oldest) = self.order.pop_front()
+        {
+            self.map.remove(&oldest);
+        }
+
+        self.order.push_back(key.clone());
+        self.map.insert(key, value);
+    }
+}
+
+thread_local! {
+    static SELECTOR_CACHE: RefCell<FixedCache<Arc<Selector>>> =
+        RefCell::new(FixedCache::new(SELECTOR_CACHE_CAPACITY));
+    static XPATH_CACHE: RefCell<FixedCache<Rc<XPath>>> =
+        RefCell::new(FixedCache::new(XPATH_CACHE_CAPACITY));
+}
 
 fn effective_max_size(max_size_bytes: Option<usize>) -> usize {
     max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES)
@@ -52,25 +102,104 @@ fn truncate_for_repr(s: &str, max_chars: usize) -> String {
     out
 }
 
+fn push_normalized(out: &mut String, input: &str, needs_space: &mut bool) {
+    for word in input.split_whitespace() {
+        if *needs_space {
+            out.push(' ');
+        }
+        out.push_str(word);
+        *needs_space = true;
+    }
+}
+
+fn normalize_text_nodes<'a, I>(chunks: I) -> String
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let mut out = String::new();
+    let mut needs_space = false;
+    for chunk in chunks {
+        push_normalized(&mut out, chunk, &mut needs_space);
+    }
+    out
+}
+
+fn normalize_xpath_text(node: XPathNode<'_>) -> String {
+    let mut out = String::new();
+    let mut needs_space = false;
+    collect_xpath_text(node, &mut out, &mut needs_space);
+    out
+}
+
+fn collect_xpath_text(node: XPathNode<'_>, out: &mut String, needs_space: &mut bool) {
+    if let Some(text) = node.text() {
+        push_normalized(out, text.text(), needs_space);
+    }
+
+    for child in node.children() {
+        collect_xpath_text(child, out, needs_space);
+    }
+}
+
+fn text_from_html_fragment(html: &str) -> String {
+    let fragment = Html::parse_fragment(html);
+    normalize_text_nodes(fragment.root_element().text())
+}
+
+fn attrs_from_element_html(element_html: &str) -> HashMap<String, String> {
+    let fragment = Html::parse_fragment(element_html);
+    let mut attrs = HashMap::new();
+
+    for element_ref in fragment.root_element().children() {
+        if let Some(element) = element_ref.value().as_element() {
+            for (name, value) in element.attrs() {
+                attrs.insert(name.to_string(), value.to_string());
+            }
+            break;
+        }
+    }
+
+    attrs
+}
+
+fn attrs_from_element_ref(el: &ElementRef<'_>) -> HashMap<String, String> {
+    let mut attrs = HashMap::new();
+    for (name, value) in el.value().attrs() {
+        attrs.insert(name.to_string(), value.to_string());
+    }
+    attrs
+}
+
+fn attrs_from_xpath_element(element: sxd_document::dom::Element<'_>) -> HashMap<String, String> {
+    let mut attrs = HashMap::new();
+    for attr in element.attributes().iter() {
+        attrs.insert(
+            attr.name().local_part().to_string(),
+            attr.value().to_string(),
+        );
+    }
+    attrs
+}
+
 /// A single HTML element returned by a CSS selection.
 ///
 /// This is a *snapshot* of an element: it stores tag, text, inner HTML
 /// and attributes, all as owned data, so there are no lifetime issues
 /// when used from Python.
 ///
-/// Properties are computed lazily on first access for better performance.
+/// Properties are cached on first access (or eagerly for snapshots) for speed.
 ///
-/// Note: This struct is NOT Clone because lazy fields use Mutex for
+/// Note: This struct is NOT Clone because cached fields use OnceLock for
 /// thread-safe interior mutability (required for async support).
 /// If cloning is needed, use to_dict() and reconstruct.
 #[pyclass(module = "scraper_rs")]
 pub struct Element {
     tag: String,
     inner_html: String,
-    // Lazy-computed fields stored in Mutex for thread-safe interior mutability.
-    // Mutex is used instead of RefCell to allow Send + Sync for async operations.
-    text: Mutex<Option<String>>,
-    attrs: Mutex<Option<HashMap<String, String>>>,
+    // Cached fields stored in OnceLock for fast, thread-safe access.
+    // Values are computed eagerly for CSS/XPath snapshots, or lazily from HTML as needed.
+    text: OnceLock<String>,
+    attrs: OnceLock<HashMap<String, String>>,
     // Store raw HTML element data for nested selections and lazy computation.
     // This avoids re-parsing when only specific properties are accessed.
     element_html: String,
@@ -87,28 +216,9 @@ impl Element {
     /// Normalized text content of the element.
     #[getter]
     pub fn text(&self) -> String {
-        // Check if already computed
-        let mut text_lock = self.text.lock().expect("Mutex poisoned");
-        if let Some(ref text) = *text_lock {
-            return text.clone();
-        }
-
-        // Compute text by parsing element_html and normalizing whitespace.
-        // Note: This approach requires parsing and string allocations,
-        // but is only done once per element and cached.
-        let fragment = Html::parse_fragment(&self.element_html);
-        let text = fragment
-            .root_element()
-            .text()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        // Cache the result
-        *text_lock = Some(text.clone());
-        text
+        self.text
+            .get_or_init(|| text_from_html_fragment(&self.element_html))
+            .clone()
     }
 
     /// Inner HTML of the element (children only, not the outer tag).
@@ -120,42 +230,22 @@ impl Element {
     /// Mapping of HTML attributes, e.g. {"href": "...", "class": "..."}.
     #[getter]
     pub fn attrs(&self) -> HashMap<String, String> {
-        // Check if already computed
-        let mut attrs_lock = self.attrs.lock().expect("Mutex poisoned");
-        if let Some(ref attrs) = *attrs_lock {
-            return attrs.clone();
-        }
-
-        // Compute attrs by parsing element_html.
-        // The element_html contains the full outer element, so we parse it
-        // and extract attributes from the first element node.
-        let fragment = Html::parse_fragment(&self.element_html);
-        let mut attrs = HashMap::new();
-
-        // Find the first element node (skipping text nodes, comments, etc.)
-        // This is valid because element_html is the serialized HTML of a single element.
-        for element_ref in fragment.root_element().children() {
-            if let Some(element) = element_ref.value().as_element() {
-                for (name, value) in element.attrs() {
-                    attrs.insert(name.to_string(), value.to_string());
-                }
-                break; // Found the element, stop searching
-            }
-        }
-
-        // Cache the result
-        *attrs_lock = Some(attrs.clone());
-        attrs
+        self.attrs
+            .get_or_init(|| attrs_from_element_html(&self.element_html))
+            .clone()
     }
 
     /// Return the value of a single attribute, or None if it doesn't exist.
     pub fn attr(&self, name: &str) -> Option<String> {
-        self.attrs().get(name).cloned()
+        self.attrs
+            .get_or_init(|| attrs_from_element_html(&self.element_html))
+            .get(name)
+            .cloned()
     }
 
     /// Convenience: behave like dict.get(key, default).
     pub fn get(&self, name: &str, default: Option<String>) -> Option<String> {
-        self.attrs().get(name).cloned().or(default)
+        self.attr(name).or(default)
     }
 
     /// Select elements inside this element's inner HTML using a CSS selector.
@@ -168,7 +258,7 @@ impl Element {
 
     /// Return the first matching descendant element, or None if nothing matches.
     pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
-        Ok(self.select(css)?.into_iter().next())
+        select_fragment_first(&self.inner_html, css)
     }
 
     /// Return the first matching descendant element, or None if nothing matches.
@@ -190,7 +280,7 @@ impl Element {
 
     /// Return the first matching descendant for an XPath expression, or None.
     pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
-        Ok(self.xpath(expr)?.into_iter().next())
+        evaluate_fragment_xpath_first(&self.inner_html, expr)
     }
 
     /// Convert this element to a plain dict.
@@ -222,32 +312,61 @@ impl Element {
 fn snapshot_element(el: ElementRef<'_>) -> Element {
     let tag = el.value().name().to_string();
     let inner_html = el.inner_html();
+    let text = normalize_text_nodes(el.text());
+    let attrs = attrs_from_element_ref(&el);
 
     // Store the full element HTML for lazy computation and nested selections
     let element_html = el.html();
+    let text_cache = OnceLock::new();
+    let _ = text_cache.set(text);
+    let attrs_cache = OnceLock::new();
+    let _ = attrs_cache.set(attrs);
 
     Element {
         tag,
         inner_html,
         element_html,
-        text: Mutex::new(None),
-        attrs: Mutex::new(None),
+        text: text_cache,
+        attrs: attrs_cache,
     }
 }
 
-fn parse_selector(css: &str) -> PyResult<Selector> {
-    Selector::parse(css)
-        .map_err(|e| PyValueError::new_err(format!("Invalid CSS selector {css:?}: {e:?}")))
+fn parse_selector(css: &str) -> PyResult<Arc<Selector>> {
+    SELECTOR_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(selector) = cache.get(css) {
+            return Ok(selector.clone());
+        }
+
+        let selector =
+            Arc::new(Selector::parse(css).map_err(|e| {
+                PyValueError::new_err(format!("Invalid CSS selector {css:?}: {e:?}"))
+            })?);
+        cache.insert(css.to_string(), selector.clone());
+        Ok(selector)
+    })
 }
 
 fn select_fragment(html: &str, css: &str) -> PyResult<Vec<Element>> {
     let selector = parse_selector(css)?;
     let fragment = Html::parse_fragment(html);
-    Ok(fragment.select(&selector).map(snapshot_element).collect())
+    Ok(fragment
+        .select(selector.as_ref())
+        .map(snapshot_element)
+        .collect())
+}
+
+fn select_fragment_first(html: &str, css: &str) -> PyResult<Option<Element>> {
+    let selector = parse_selector(css)?;
+    let fragment = Html::parse_fragment(html);
+    Ok(fragment
+        .select(selector.as_ref())
+        .next()
+        .map(snapshot_element))
 }
 
 fn escape_html(value: &str) -> String {
-    let mut escaped = String::new();
+    let mut escaped = String::with_capacity(value.len());
     for ch in value.chars() {
         match ch {
             '&' => escaped.push_str("&amp;"),
@@ -310,23 +429,42 @@ fn snapshot_xpath_element(node: XPathNode<'_>) -> PyResult<Element> {
     let tag = element.name().local_part().to_string();
     let inner_html = serialize_children(node);
     let element_html = serialize_element(node);
+    let text = normalize_xpath_text(node);
+    let attrs = attrs_from_xpath_element(element);
+    let text_cache = OnceLock::new();
+    let _ = text_cache.set(text);
+    let attrs_cache = OnceLock::new();
+    let _ = attrs_cache.set(attrs);
 
     Ok(Element {
         tag,
         inner_html,
         element_html,
-        text: Mutex::new(None),
-        attrs: Mutex::new(None),
+        text: text_cache,
+        attrs: attrs_cache,
+    })
+}
+
+fn compile_xpath(expr: &str) -> PyResult<Rc<XPath>> {
+    XPATH_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(xpath) = cache.get(expr) {
+            return Ok(xpath.clone());
+        }
+
+        let factory = Factory::new();
+        let expression = factory
+            .build(expr)
+            .map_err(|e| PyValueError::new_err(format!("Invalid XPath {expr:?}: {e:?}")))?
+            .ok_or_else(|| PyValueError::new_err("Provided XPath expression is empty"))?;
+        let expression = Rc::new(expression);
+        cache.insert(expr.to_string(), expression.clone());
+        Ok(expression)
     })
 }
 
 fn evaluate_xpath_nodes<'d>(node: XPathNode<'d>, expr: &str) -> PyResult<Vec<XPathNode<'d>>> {
-    let factory = Factory::new();
-    let expression = factory
-        .build(expr)
-        .map_err(|e| PyValueError::new_err(format!("Invalid XPath {expr:?}: {e:?}")))?
-        .ok_or_else(|| PyValueError::new_err("Provided XPath expression is empty"))?;
-
+    let expression = compile_xpath(expr)?;
     let context = Context::new();
     let result = expression
         .evaluate(&context, node)
@@ -347,6 +485,26 @@ fn evaluate_xpath_elements<'d>(node: XPathNode<'d>, expr: &str) -> PyResult<Vec<
         .collect()
 }
 
+fn evaluate_xpath_first_element<'d>(node: XPathNode<'d>, expr: &str) -> PyResult<Option<Element>> {
+    let expression = compile_xpath(expr)?;
+    let context = Context::new();
+    let result = expression
+        .evaluate(&context, node)
+        .map_err(|e| PyValueError::new_err(format!("Failed to evaluate XPath {expr:?}: {e:?}")))?;
+
+    match result {
+        Value::Nodeset(nodeset) => nodeset
+            .document_order()
+            .into_iter()
+            .next()
+            .map(snapshot_xpath_element)
+            .transpose(),
+        other => Err(PyValueError::new_err(format!(
+            "XPath {expr:?} must return a node set (got {other:?})"
+        ))),
+    }
+}
+
 fn find_first_element_by_name<'d>(node: XPathNode<'d>, name: &str) -> Option<XPathNode<'d>> {
     if let Some(element) = node.element()
         && element.name().local_part() == name
@@ -364,7 +522,10 @@ fn find_first_element_by_name<'d>(node: XPathNode<'d>, name: &str) -> Option<XPa
 }
 
 fn evaluate_fragment_xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
-    let wrapped = format!("<xpath-fragment>{}</xpath-fragment>", html);
+    let mut wrapped = String::with_capacity(html.len() + "<xpath-fragment></xpath-fragment>".len());
+    wrapped.push_str("<xpath-fragment>");
+    wrapped.push_str(html);
+    wrapped.push_str("</xpath-fragment>");
     let package = sxd_html::parse_html(&wrapped);
     let document = package.as_document();
 
@@ -375,6 +536,23 @@ fn evaluate_fragment_xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
     };
 
     evaluate_xpath_elements(wrapper, expr)
+}
+
+fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<Option<Element>> {
+    let mut wrapped = String::with_capacity(html.len() + "<xpath-fragment></xpath-fragment>".len());
+    wrapped.push_str("<xpath-fragment>");
+    wrapped.push_str(html);
+    wrapped.push_str("</xpath-fragment>");
+    let package = sxd_html::parse_html(&wrapped);
+    let document = package.as_document();
+
+    let Some(wrapper) = find_first_element_by_name(document.root().into(), "xpath-fragment") else {
+        return Err(PyValueError::new_err(
+            "Failed to parse HTML fragment for XPath evaluation",
+        ));
+    };
+
+    evaluate_xpath_first_element(wrapper, expr)
 }
 
 /// A parsed HTML document with convenient, Pythonic selectors.
@@ -488,14 +666,7 @@ impl Document {
     /// All text content from the document, normalized and joined by spaces.
     #[getter]
     pub fn text(&self) -> String {
-        self.html
-            .root_element()
-            .text()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
+        normalize_text_nodes(self.html.root_element().text())
     }
 
     /// Select all elements matching the given CSS selector.
@@ -509,7 +680,7 @@ impl Document {
         let selector = parse_selector(css)?;
         Ok(self
             .html
-            .select(&selector)
+            .select(selector.as_ref())
             .map(snapshot_element)
             .collect::<Vec<_>>())
     }
@@ -518,7 +689,12 @@ impl Document {
     ///
     ///     first_link = doc.select_first("a[href]")
     pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
-        Ok(self.select(css)?.into_iter().next())
+        let selector = parse_selector(css)?;
+        Ok(self
+            .html
+            .select(selector.as_ref())
+            .next()
+            .map(snapshot_element))
     }
 
     /// Return the first matching element, or None if nothing matches.
@@ -552,7 +728,12 @@ impl Document {
 
     /// Return the first matching element for an XPath expression, or None.
     pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
-        Ok(self.xpath(expr)?.into_iter().next())
+        let package_lock = self.ensure_xpath_package();
+        let package = package_lock
+            .as_ref()
+            .expect("XPath package should be initialized");
+        let document = package.as_document();
+        evaluate_xpath_first_element(document.root().into(), expr)
     }
 
     /// Explicitly release parsed DOMs to free memory early.
@@ -818,12 +999,7 @@ fn _select_first_fragment_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
-            Python::attach(|py| {
-                py.detach(|| {
-                    let elements = select_fragment(&html, &css)?;
-                    Ok(elements.into_iter().next())
-                })
-            })
+            Python::attach(|py| py.detach(|| select_fragment_first(&html, &css)))
         })
         .await
         .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
@@ -853,12 +1029,7 @@ fn _xpath_first_fragment_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
-            Python::attach(|py| {
-                py.detach(|| {
-                    let elements = evaluate_fragment_xpath(&html, &expr)?;
-                    Ok(elements.into_iter().next())
-                })
-            })
+            Python::attach(|py| py.detach(|| evaluate_fragment_xpath_first(&html, &expr)))
         })
         .await
         .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
