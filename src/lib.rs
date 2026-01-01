@@ -57,7 +57,7 @@ fn truncate_for_repr(s: &str, max_chars: usize) -> String {
 /// This is a *snapshot* of an element: it stores tag, text, inner HTML
 /// and attributes, all as owned data, so there are no lifetime issues
 /// when used from Python.
-/// 
+///
 /// Properties are computed lazily on first access for better performance.
 #[pyclass(module = "scraper_rs")]
 pub struct Element {
@@ -86,7 +86,7 @@ impl Element {
         if let Some(ref text) = *text_lock {
             return text.clone();
         }
-        
+
         // Compute text by parsing inner_html
         let fragment = Html::parse_fragment(&self.element_html);
         let text = fragment
@@ -97,7 +97,7 @@ impl Element {
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ");
-        
+
         // Cache the result
         *text_lock = Some(text.clone());
         text
@@ -117,11 +117,11 @@ impl Element {
         if let Some(ref attrs) = *attrs_lock {
             return attrs.clone();
         }
-        
+
         // Compute attrs by parsing element_html
         let fragment = Html::parse_fragment(&self.element_html);
         let mut attrs = HashMap::new();
-        
+
         // Get the first child element
         for element_ref in fragment.root_element().children() {
             if let Some(element) = element_ref.value().as_element() {
@@ -131,7 +131,7 @@ impl Element {
                 break; // Only process the first element
             }
         }
-        
+
         // Cache the result
         *attrs_lock = Some(attrs.clone());
         attrs
@@ -211,7 +211,7 @@ impl Element {
 fn snapshot_element(el: ElementRef<'_>) -> Element {
     let tag = el.value().name().to_string();
     let inner_html = el.inner_html();
-    
+
     // Store the full element HTML for lazy computation and nested selections
     let element_html = el.html();
 
@@ -403,18 +403,18 @@ impl Document {
             closed: false,
         })
     }
-    
+
     /// Get or initialize the XPath package lazily
     fn ensure_xpath_package(&self) -> std::sync::MutexGuard<'_, Option<sxd_document::Package>> {
         let mut package_lock = self.xpath_package.lock().unwrap();
-        
+
         // Check if already initialized
         if package_lock.is_none() {
             // Parse HTML for XPath support
             let package = sxd_html::parse_html(&self.raw_html);
             *package_lock = Some(package);
         }
-        
+
         package_lock
     }
 
