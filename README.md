@@ -2,7 +2,7 @@
 
 [![PyPI - Version](https://img.shields.io/pypi/v/scraper-rust)](https://pypi.org/project/scraper-rust/)
 [![Tests](https://github.com/RustedBytes/scraper-rs/actions/workflows/tests.yml/badge.svg)](https://github.com/RustedBytes/scraper-rs/actions/workflows/tests.yml)
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/scraper-rs?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scraper-rs)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/scraper-rust?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scraper-rust)
 
 Python bindings for the Rust `scraper` crate via PyO3. It provides a lightweight `Document`/`Element` API with CSS selectors, XPath (via `sxd_html`/`sxd_xpath`), handy helpers, and zero Python-side parsing work.
 
