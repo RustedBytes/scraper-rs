@@ -257,3 +257,34 @@ async def test_async_nested_selectors(sample_html: str) -> None:
     assert first_link is not None
     assert first_link.text == "First"
     assert first_link.attr("href") == "/a"
+
+
+@pytest.mark.asyncio
+async def test_async_document_async_context_manager_closes(sample_html: str) -> None:
+    """Test AsyncDocument supports async context manager cleanup."""
+    doc = await async_scraper.parse(sample_html)
+
+    async with doc as managed_doc:
+        assert managed_doc is doc
+        assert await managed_doc.find("a[href]") is not None
+
+    assert doc.html == ""
+    assert doc.text == ""
+    assert await doc.select("a") == []
+    assert await doc.xpath("//a") == []
+    assert await doc.find("a") is None
+
+
+@pytest.mark.asyncio
+async def test_async_document_async_context_manager_closes_on_error(
+    sample_html: str,
+) -> None:
+    """Test AsyncDocument async context manager closes even when errors occur."""
+    doc = await async_scraper.parse(sample_html)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        async with doc:
+            raise RuntimeError("boom")
+
+    assert doc.html == ""
+    assert await doc.select("a") == []

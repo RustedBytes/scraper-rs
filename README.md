@@ -56,11 +56,12 @@ html = "<div class='item'><a href='/a'>First</a></div>"
 
 
 async def main():
-    doc = await scraping_async.parse(html)
-    items = await doc.select(".item")
-    first_link = await items[0].select_first("a[href]")
+    async with await scraping_async.parse(html) as doc:
+        items = await doc.select(".item")
+        first_link = await items[0].select_first("a[href]")
+        print(first_link.text)  # First
+
     links = await scraping_async.select(html, "a[href]")
-    print(first_link.text)  # First
     print([link.attr("href") for link in links])  # ["/a"]
 
 
@@ -69,6 +70,7 @@ asyncio.run(main())
 
 All async functions accept the same keyword arguments as their sync counterparts (`max_size_bytes`, `truncate_on_limit`, etc.).
 Async wrappers expose the underlying sync objects via `.document` and `.element` if you need direct access.
+`AsyncDocument` supports `async with` for automatic cleanup in coroutine code.
 
 ### Large documents and memory safety
 
@@ -107,6 +109,7 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - `max_size_bytes` lets you fail fast on oversized HTML; defaults to a 1 GiB limit.
 - `truncate_on_limit` allows parsing a truncated version (limited to `max_size_bytes`) of oversized HTML instead of raising an error.
 - Call `doc.close()` (or `with Document(html) as doc: ...`) to free parsed DOM resources when you're done.
+- In async workflows, use `async with await scraper_rs.asyncio.parse(html) as doc: ...` for automatic `AsyncDocument` cleanup.
 
 ## Installation
 

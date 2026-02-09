@@ -16,14 +16,16 @@ html = """
 
 
 async def main():
-    # Example 1: Parse HTML asynchronously
-    print("Example 1: Async parse")
-    doc = await async_scraper.parse(html)
-    print(f"  Document text: {doc.text}")
-    items = await doc.select(".item")
-    first_link = await items[0].select_first("a[href]")
-    if first_link:
-        print(f"  First link (nested): {first_link.text} -> {first_link.attr('href')}")
+    # Example 1: Parse HTML asynchronously with async context manager cleanup
+    print("Example 1: Async parse + async with cleanup")
+    async with await async_scraper.parse(html) as doc:
+        print(f"  Document text: {doc.text}")
+        items = await doc.select(".item")
+        first_link = await items[0].select_first("a[href]")
+        if first_link:
+            print(
+                f"  First link (nested): {first_link.text} -> {first_link.attr('href')}"
+            )
     print()
 
     # Example 2: Select elements by CSS selector asynchronously

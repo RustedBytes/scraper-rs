@@ -142,6 +142,12 @@ class AsyncDocument:
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self._document.__exit__(exc_type, exc_value, traceback)
 
+    async def __aenter__(self) -> "AsyncDocument":
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+        self._document.__exit__(exc_type, exc_value, traceback)
+
     def __repr__(self) -> str:
         return f"<AsyncDocument {self._document!r}>"
 

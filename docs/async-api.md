@@ -32,12 +32,23 @@ from scraper_rs import asyncio as async_scraper
 html = "<div class='item'><a href='/a'>First</a></div>"
 
 async def main():
-    doc = await async_scraper.parse(html)
-    items = await doc.select(".item")
-    first_link = await items[0].select_first("a[href]")
-    print(first_link.text, first_link.attr("href"))
+    async with await async_scraper.parse(html) as doc:
+        items = await doc.select(".item")
+        first_link = await items[0].select_first("a[href]")
+        print(first_link.text, first_link.attr("href"))
 
 asyncio.run(main())
+```
+
+## Context management and cleanup
+
+- `AsyncDocument` supports `async with` and closes the underlying `Document` on exit (including exception paths).
+- `AsyncDocument` also supports sync `with`, but `async with` is preferred inside coroutine code.
+
+```py
+doc = await async_scraper.parse(html)
+async with doc:
+    items = await doc.select(".item")
 ```
 
 ## How async execution works
