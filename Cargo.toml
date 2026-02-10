@@ -1,6 +1,6 @@
 [package]
 name = "scraper-rs"
-version = "0.2.28"
+version = "0.2.29"
 edition = "2024"
 
 [lib]
@@ -12,7 +12,7 @@ pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
 pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["rt", "macros"] }
 
-scraper = { version = "0.25", features = ["atomic"] }
+scraper = { git = "https://github.com/rust-scraper/scraper", features = ["atomic"] }
 
 sxd-document = "0.3.2"
 sxd-xpath = "0.4.2"
