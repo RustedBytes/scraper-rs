@@ -14,6 +14,7 @@ from .scraper_rs import (
     _xpath_first_fragment_async,
     _xpath_fragment_async,
     first_async as _first_async,
+    prettify as _prettify,
     select_async as _select_async,
     select_first_async as _select_first_async,
     xpath_async as _xpath_async,
@@ -87,6 +88,9 @@ class AsyncElement:
             await _xpath_first_fragment_async(self._element.html, expr)
         )
 
+    def prettify(self) -> str:
+        return self._element.prettify()
+
     def to_dict(self) -> dict[str, str | dict[str, str]]:
         return self._element.to_dict()
 
@@ -131,6 +135,9 @@ class AsyncDocument:
 
     async def xpath_first(self, expr: str) -> AsyncElement | None:
         return _wrap_element(await _xpath_first_async(self._document.html, expr))
+
+    def prettify(self) -> str:
+        return self._document.prettify()
 
     def close(self) -> None:
         self._document.close()
@@ -254,6 +261,11 @@ async def xpath_first(html: str, expr: str, **kwargs) -> "AsyncElement | None":
     return _wrap_element(await _xpath_first_async(html, expr, **kwargs))
 
 
+async def prettify(html: str, **kwargs) -> str:
+    """Render HTML as a readable, indented DOM string asynchronously."""
+    return await asyncio.to_thread(_prettify, html, **kwargs)
+
+
 __all__ = [
     "AsyncDocument",
     "AsyncElement",
@@ -263,4 +275,5 @@ __all__ = [
     "select_first",
     "xpath",
     "xpath_first",
+    "prettify",
 ]

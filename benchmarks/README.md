@@ -181,48 +181,48 @@ Scraper-rs Benchmark: Sync vs Async Performance
 SMALL HTML (~200 bytes)
 --------------------------------------------------------------------------------
 Synchronous functions:
-  select                        :    444.65 µs total,      4.45 µs avg
-  select_first                  :    337.87 µs total,      3.38 µs avg
-  first                         :    335.80 µs total,      3.36 µs avg
-  xpath                         :      1.06 ms total,     10.57 µs avg
-  xpath_first                   :    921.52 µs total,      9.22 µs avg
+  select                        :    444.58 µs total,      4.45 µs avg
+  select_first                  :    347.40 µs total,      3.47 µs avg
+  first                         :    341.36 µs total,      3.41 µs avg
+  xpath                         :      1.08 ms total,     10.77 µs avg
+  xpath_first                   :    940.13 µs total,      9.40 µs avg
 
 Asynchronous functions (sequential):
-  async select                  :     13.68 ms total,    136.82 µs avg
-  async select_first            :     10.09 ms total,    100.88 µs avg
-  async first                   :      8.50 ms total,     84.95 µs avg
-  async xpath                   :     10.51 ms total,    105.07 µs avg
-  async xpath_first             :      9.75 ms total,     97.45 µs avg
+  async select                  :     14.00 ms total,    139.99 µs avg
+  async select_first            :     11.15 ms total,    111.51 µs avg
+  async first                   :     13.48 ms total,    134.79 µs avg
+  async xpath                   :     13.07 ms total,    130.73 µs avg
+  async xpath_first             :      9.96 ms total,     99.61 µs avg
 
 Asynchronous functions (concurrent, 10 tasks):
-  concurrent select             :    690.96 µs total,     69.10 µs avg
-  concurrent xpath              :    370.73 µs total,     37.07 µs avg
+  concurrent select             :    620.41 µs total,     62.04 µs avg
+  concurrent xpath              :    219.07 µs total,     21.91 µs avg
 
 MEDIUM HTML (~5KB, 100 items)
 --------------------------------------------------------------------------------
 Synchronous functions:
-  select                        :     14.30 ms total,    143.00 µs avg
-  xpath                         :     28.92 ms total,    289.23 µs avg
+  select                        :     14.55 ms total,    145.48 µs avg
+  xpath                         :     28.91 ms total,    289.14 µs avg
 
 Asynchronous functions (sequential):
-  async select                  :     37.90 ms total,    379.00 µs avg
-  async xpath                   :     53.10 ms total,    530.99 µs avg
+  async select                  :     32.84 ms total,    328.38 µs avg
+  async xpath                   :     50.15 ms total,    501.50 µs avg
 
 Asynchronous functions (concurrent, 10 tasks):
-  concurrent select             :    468.07 µs total,     46.81 µs avg
+  concurrent select             :    615.94 µs total,     61.59 µs avg
 
 LARGE HTML (~50KB, 1000 items)
 --------------------------------------------------------------------------------
 Synchronous functions:
-  select                        :     87.94 ms total,      1.76 ms avg
-  xpath                         :    213.16 ms total,      4.26 ms avg
+  select                        :     87.02 ms total,      1.74 ms avg
+  xpath                         :    212.63 ms total,      4.25 ms avg
 
 Asynchronous functions (sequential):
-  async select                  :    109.81 ms total,      2.20 ms avg
-  async xpath                   :    242.50 ms total,      4.85 ms avg
+  async select                  :    111.84 ms total,      2.24 ms avg
+  async xpath                   :    240.10 ms total,      4.80 ms avg
 
 Asynchronous functions (concurrent, 10 tasks):
-  concurrent select             :      6.02 ms total,    601.54 µs avg
+  concurrent select             :      6.05 ms total,    605.23 µs avg
 
 ================================================================================
 Summary
@@ -254,48 +254,48 @@ Scraper-rs Benchmark: Sync vs Async Performance
 SMALL HTML (~200 bytes)
 --------------------------------------------------------------------------------
 Synchronous functions:
-  select                        :    444.07 µs total,      4.44 µs avg
-  select_first                  :    336.63 µs total,      3.37 µs avg
-  first                         :    335.54 µs total,      3.36 µs avg
-  xpath                         :      1.07 ms total,     10.75 µs avg
-  xpath_first                   :    934.05 µs total,      9.34 µs avg
+  select                        :    446.76 µs total,      4.47 µs avg
+  select_first                  :    339.03 µs total,      3.39 µs avg
+  first                         :    341.57 µs total,      3.42 µs avg
+  xpath                         :      1.07 ms total,     10.68 µs avg
+  xpath_first                   :    942.18 µs total,      9.42 µs avg
 
 Asynchronous functions (sequential):
-  async select                  :     11.98 ms total,    119.84 µs avg
-  async select_first            :     11.78 ms total,    117.77 µs avg
-  async first                   :     11.95 ms total,    119.52 µs avg
-  async xpath                   :     14.76 ms total,    147.60 µs avg
-  async xpath_first             :     13.89 ms total,    138.86 µs avg
+  async select                  :     12.85 ms total,    128.48 µs avg
+  async select_first            :     10.26 ms total,    102.58 µs avg
+  async first                   :     10.69 ms total,    106.95 µs avg
+  async xpath                   :      9.63 ms total,     96.27 µs avg
+  async xpath_first             :      9.26 ms total,     92.62 µs avg
 
 Asynchronous functions (concurrent, 10 tasks):
-  concurrent select             :    754.15 µs total,     75.41 µs avg
-  concurrent xpath              :    289.25 µs total,     28.93 µs avg
+  concurrent select             :    674.20 µs total,     67.42 µs avg
+  concurrent xpath              :    194.26 µs total,     19.43 µs avg
 
 MEDIUM HTML (~5KB, 100 items)
 --------------------------------------------------------------------------------
 Synchronous functions:
-  select                        :     14.40 ms total,    144.01 µs avg
-  xpath                         :     28.75 ms total,    287.53 µs avg
+  select                        :     14.50 ms total,    145.04 µs avg
+  xpath                         :     28.91 ms total,    289.09 µs avg
 
 Asynchronous functions (sequential):
-  async select                  :     32.47 ms total,    324.69 µs avg
-  async xpath                   :     48.13 ms total,    481.31 µs avg
+  async select                  :     37.06 ms total,    370.57 µs avg
+  async xpath                   :     52.93 ms total,    529.28 µs avg
 
 Asynchronous functions (concurrent, 10 tasks):
-  concurrent select             :    473.12 µs total,     47.31 µs avg
+  concurrent select             :    554.48 µs total,     55.45 µs avg
 
 LARGE HTML (~50KB, 1000 items)
 --------------------------------------------------------------------------------
 Synchronous functions:
-  select                        :     86.93 ms total,      1.74 ms avg
-  xpath                         :    211.43 ms total,      4.23 ms avg
+  select                        :     86.67 ms total,      1.73 ms avg
+  xpath                         :    213.82 ms total,      4.28 ms avg
 
 Asynchronous functions (sequential):
-  async select                  :    106.97 ms total,      2.14 ms avg
-  async xpath                   :    240.12 ms total,      4.80 ms avg
+  async select                  :    107.18 ms total,      2.14 ms avg
+  async xpath                   :    235.05 ms total,      4.70 ms avg
 
 Asynchronous functions (concurrent, 10 tasks):
-  concurrent select             :      5.94 ms total,    593.69 µs avg
+  concurrent select             :      5.33 ms total,    532.97 µs avg
 
 ================================================================================
 Summary
@@ -326,56 +326,56 @@ scraper-rs vs markupever Benchmark
 SMALL HTML (~200 bytes)
 ------------------------------------------------------------------------------------------
 scraper-rs:
-  parse                         :    375.00 µs total,      3.75 µs avg
-  css_select                    :    400.75 µs total,      4.01 µs avg
-  css_select_first              :    335.96 µs total,      3.36 µs avg
+  parse                         :    382.15 µs total,      3.82 µs avg
+  css_select                    :    394.83 µs total,      3.95 µs avg
+  css_select_first              :    330.69 µs total,      3.31 µs avg
 
 markupever:
-  parse                         :    400.41 µs total,      4.00 µs avg
-  css_select                    :    441.63 µs total,      4.42 µs avg
-  css_select_first              :    518.41 µs total,      5.18 µs avg
+  parse                         :    397.00 µs total,      3.97 µs avg
+  css_select                    :    443.59 µs total,      4.44 µs avg
+  css_select_first              :    525.08 µs total,      5.25 µs avg
 
   Operation              scraper-rs           markupever         Ratio (scraper-rs/markupever)
   -------------------------------------------------------------------------------------
-  parse                      3.75 µs          4.00 µs       0.94x
-  css_select                 4.01 µs          4.42 µs       0.91x
-  css_select_first           3.36 µs          5.18 µs       0.65x
+  parse                      3.82 µs          3.97 µs       0.96x
+  css_select                 3.95 µs          4.44 µs       0.89x
+  css_select_first           3.31 µs          5.25 µs       0.63x
 
 MEDIUM HTML (~5KB, 100 items)
 ------------------------------------------------------------------------------------------
 scraper-rs:
-  parse                         :      9.65 ms total,     96.51 µs avg
-  css_select                    :     13.80 ms total,    138.02 µs avg
-  css_select_first              :     10.24 ms total,    102.45 µs avg
+  parse                         :      9.84 ms total,     98.44 µs avg
+  css_select                    :     13.84 ms total,    138.45 µs avg
+  css_select_first              :     10.35 ms total,    103.46 µs avg
 
 markupever:
-  parse                         :     10.92 ms total,    109.18 µs avg
-  css_select                    :     10.70 ms total,    107.03 µs avg
-  css_select_first              :     11.18 ms total,    111.84 µs avg
+  parse                         :     10.58 ms total,    105.78 µs avg
+  css_select                    :     10.66 ms total,    106.57 µs avg
+  css_select_first              :     11.12 ms total,    111.16 µs avg
 
   Operation              scraper-rs           markupever         Ratio (scraper-rs/markupever)
   -------------------------------------------------------------------------------------
-  parse                     96.51 µs        109.18 µs       0.88x
-  css_select               138.02 µs        107.03 µs       1.29x
-  css_select_first         102.45 µs        111.84 µs       0.92x
+  parse                     98.44 µs        105.78 µs       0.93x
+  css_select               138.45 µs        106.57 µs       1.30x
+  css_select_first         103.46 µs        111.16 µs       0.93x
 
 LARGE HTML (~50KB, 1000 items)
 ------------------------------------------------------------------------------------------
 scraper-rs:
-  parse                         :     56.79 ms total,      1.14 ms avg
-  css_select                    :     84.03 ms total,      1.68 ms avg
-  css_select_first              :     56.47 ms total,      1.13 ms avg
+  parse                         :     56.68 ms total,      1.13 ms avg
+  css_select                    :     82.28 ms total,      1.65 ms avg
+  css_select_first              :     56.09 ms total,      1.12 ms avg
 
 markupever:
-  parse                         :     60.11 ms total,      1.20 ms avg
-  css_select                    :     60.27 ms total,      1.21 ms avg
-  css_select_first              :     60.42 ms total,      1.21 ms avg
+  parse                         :     59.92 ms total,      1.20 ms avg
+  css_select                    :     60.07 ms total,      1.20 ms avg
+  css_select_first              :     60.23 ms total,      1.20 ms avg
 
   Operation              scraper-rs           markupever         Ratio (scraper-rs/markupever)
   -------------------------------------------------------------------------------------
-  parse                      1.14 ms          1.20 ms       0.94x
-  css_select                 1.68 ms          1.21 ms       1.39x
-  css_select_first           1.13 ms          1.21 ms       0.93x
+  parse                      1.13 ms          1.20 ms       0.95x
+  css_select                 1.65 ms          1.20 ms       1.37x
+  css_select_first           1.12 ms          1.20 ms       0.93x
 
 ==========================================================================================
 Summary
@@ -424,19 +424,19 @@ Iterations per size: scaled to ~64 MiB parsed (min=5, max=120)
 
   Input Size   Runs  Median ms   P95 ms   Base RSS   Peak RSS  Delta RSS Delta/Input
 ----------------------------------------------------------------------------------------------
-    2.00 KiB    120      0.023    0.025      26.44      26.98       0.54      276.00x
-    4.00 KiB    120      0.046    0.052      26.48      27.04       0.56      143.00x
-    8.00 KiB    120      0.094    0.099      26.55      26.96       0.41       52.50x
-   16.00 KiB    120      0.173    0.176      26.64      27.31       0.67       42.75x
-   32.00 KiB    120      0.344    0.349      26.90      27.80       0.90       28.75x
-   64.00 KiB    120      0.689    0.693      27.30      28.54       1.24       19.81x
-  128.00 KiB    120      1.364    1.396      29.30      29.80       0.50        3.97x
-  256.00 KiB    120      2.718    2.754      32.11      32.61       0.50        2.00x
-  512.00 KiB    120      5.464    5.506      38.34      38.84       0.50        1.00x
-    1.00 MiB     64     10.788   10.848      50.72      51.21       0.49        0.49x
-    2.00 MiB     32     24.582   24.741      42.17      59.91      17.73        8.87x
-    4.00 MiB     16     49.237   50.122      58.01      92.81      34.80        8.70x
-    8.00 MiB      8     99.926  100.284      89.30     158.23      68.93        8.62x
+    2.00 KiB    120      0.023    0.025      26.38      26.92       0.54      276.00x
+    4.00 KiB    120      0.044    0.048      26.42      26.97       0.55      141.00x
+    8.00 KiB    120      0.091    0.094      26.51      26.94       0.43       54.50x
+   16.00 KiB    120      0.173    0.178      26.65      27.32       0.67       42.75x
+   32.00 KiB    120      0.339    0.344      26.79      27.68       0.89       28.62x
+   64.00 KiB    120      0.684    0.699      27.28      28.52       1.24       19.81x
+  128.00 KiB    120      1.351    1.366      29.19      29.69       0.50        3.97x
+  256.00 KiB    120      2.646    2.695      32.07      32.57       0.50        2.00x
+  512.00 KiB    120      5.396    5.428      38.15      38.65       0.50        1.00x
+    1.00 MiB     64     10.798   10.921      50.57      51.06       0.49        0.49x
+    2.00 MiB     32     24.132   24.643      42.19      59.92      17.73        8.87x
+    4.00 MiB     16     49.059   50.575      58.02      92.82      34.80        8.70x
+    8.00 MiB      8     98.611   99.002      89.16     158.09      68.93        8.62x
 
 Notes:
 - Each size runs in a fresh subprocess to keep RSS measurements isolated.

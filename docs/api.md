@@ -27,6 +27,7 @@ Key properties and methods (see `src/lib.rs` and `scraper_rs.pyi`):
 - `css(css) -> list[Element]`: alias for `select`.
 - `xpath(expr) -> list[Element]`: XPath selection (elements only).
 - `xpath_first(expr) -> Element | None`: first XPath match.
+- `prettify() -> str`: indented DOM string for debugging/logging.
 - `close()`: free parsed DOMs and clear stored HTML.
 - Context manager support: `with Document(html) as doc: ...`.
 
@@ -63,6 +64,7 @@ Fields and methods:
 - `attr(name) -> str | None`: return a single attribute value.
 - `get(name, default=None) -> str | None`: dict-style access with default.
 - `to_dict() -> dict`: serialize the element fields.
+- `prettify() -> str`: indented element HTML for readable output.
 - Selector helpers: `select`, `select_first`, `find`, `css`, `xpath`, `xpath_first`.
 
 Element selection uses fragment parsing helpers in `src/lib.rs`:
@@ -83,6 +85,7 @@ if item:
 The top-level helpers parse the HTML and immediately run the query. They are useful for one-shot usage:
 
 - `parse(html, *, max_size_bytes=None, truncate_on_limit=False) -> Document`
+- `prettify(html, *, max_size_bytes=None, truncate_on_limit=False) -> str`
 - `select(html, css, *, max_size_bytes=None, truncate_on_limit=False) -> list[Element]`
 - `select_first(html, css, *, max_size_bytes=None, truncate_on_limit=False) -> Element | None`
 - `first(html, css, *, max_size_bytes=None, truncate_on_limit=False) -> Element | None`

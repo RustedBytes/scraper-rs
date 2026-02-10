@@ -22,6 +22,7 @@ All async functions accept the same keyword arguments as the sync API (`max_size
 - `first(html, css, **kwargs) -> AsyncElement | None`
 - `xpath(html, expr, **kwargs) -> list[AsyncElement]`
 - `xpath_first(html, expr, **kwargs) -> AsyncElement | None`
+- `prettify(html, **kwargs) -> str`
 
 Example (from `examples/demo_asyncio.py`):
 

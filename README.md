@@ -9,7 +9,7 @@ Python bindings for the Rust [**scraper**](https://github.com/rust-scraper/scrap
 ## Quick start
 
 ```py
-from scraper_rs import Document, first, select, select_first, xpath
+from scraper_rs import Document, first, prettify, select, select_first, xpath
 
 html = """
 <html><body>
@@ -41,9 +41,15 @@ print([link.attr("href") for link in links])  # ["/a", "/b"]
 print(first(html, "a[href]").text)            # First
 print(select_first(html, "a[href]").text)     # First
 print([link.text for link in xpath(html, "//div[@class='item']/a")])  # ["First", "Second"]
+print(prettify(html))
 ```
 
-For a runnable sample, see `examples/demo.py`.
+For runnable samples, see `examples/demo.py` and `examples/demo_prettify_url.py`.
+Quick URL prettify demo:
+
+```sh
+python examples/demo_prettify_url.py https://example.com --max-lines 80
+```
 
 ### Async usage
 
@@ -102,11 +108,13 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - `Document(html: str)` / `Document.from_html(html)` parse HTML for CSS and keep the DOM; XPath parsing is initialized lazily on first XPath query.
 - `.select(css)` → `list[Element]`, `.select_first(css)` / `.find(css)` → first `Element | None`, `.css(css)` is an alias.
 - `.xpath(expr)` / `.xpath_first(expr)` evaluate XPath expressions that return element nodes.
+- `.prettify()` renders the current DOM as an indented string for readable output/debugging.
 - `.text` returns normalized text; `Document.html` is the original input HTML; `Element.html` is inner HTML.
 - `scraper_rs.asyncio` exposes async `parse`/`select`/`xpath` wrappers to keep the event loop responsive.
 - `Element` exposes `.tag`, `.text`, `.html`, `.attrs` plus helpers `.attr(name)`, `.get(name, default)`, `.to_dict()`.
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
-- Top-level helpers mirror the class methods: `parse(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
+- Elements also expose `.prettify()` to format element HTML with indentation.
+- Top-level helpers mirror the class methods: `parse(html)`, `prettify(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
 - `max_size_bytes` lets you fail fast on oversized HTML; defaults to a 1 GiB limit.
 - `truncate_on_limit` allows parsing a truncated version (limited to `max_size_bytes`) of oversized HTML instead of raising an error.
 - Call `doc.close()` (or `with Document(html) as doc: ...`) to free parsed DOM resources when you're done.

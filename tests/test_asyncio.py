@@ -29,6 +29,21 @@ async def test_async_parse(sample_html: str) -> None:
     assert isinstance(doc.document, Document)
     assert doc.text == "First Second"
     assert doc.html == sample_html
+    assert doc.prettify().startswith("<html>")
+
+
+@pytest.mark.asyncio
+async def test_async_prettify(sample_html: str) -> None:
+    """Test async prettify wrappers."""
+    doc = await async_scraper.parse(sample_html)
+    first_item = await doc.select_first(".item")
+    top_level = await async_scraper.prettify(sample_html)
+
+    assert first_item is not None
+    assert top_level == doc.prettify()
+    assert top_level.startswith("<html>")
+    assert "  <body>" in top_level
+    assert first_item.prettify().startswith('<div class="item" data-id="1">')
 
 
 @pytest.mark.asyncio

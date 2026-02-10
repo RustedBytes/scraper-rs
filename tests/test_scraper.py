@@ -7,6 +7,7 @@ from scraper_rs import (
     __version__,
     first,
     parse,
+    prettify,
     select,
     select_first,
     xpath,
@@ -33,6 +34,30 @@ def test_document_properties(sample_html: str) -> None:
     assert doc.text == "First Second"
     assert "len_html" in repr(doc)
     assert str(len(sample_html)) in repr(doc)
+
+
+def test_prettify_document_and_top_level(sample_html: str) -> None:
+    doc = Document(sample_html)
+
+    pretty_via_doc = doc.prettify()
+    pretty_via_function = prettify(sample_html)
+
+    assert pretty_via_doc == pretty_via_function
+    assert pretty_via_doc.startswith("<html>")
+    assert "  <body>" in pretty_via_doc
+    assert '    <div class="item" data-id="1">' in pretty_via_doc
+    assert '      <a href="/a">First</a>' in pretty_via_doc
+
+
+def test_prettify_element(sample_html: str) -> None:
+    doc = Document(sample_html)
+    first_item = doc.select_first(".item")
+
+    assert first_item is not None
+    pretty_item = first_item.prettify()
+    assert pretty_item.startswith('<div class="item" data-id="1">')
+    assert pretty_item.endswith("</div>")
+    assert '  <a href="/a">First</a>' in pretty_item
 
 
 def test_select_and_element_helpers(sample_html: str) -> None:
@@ -244,6 +269,7 @@ def test_document_close_releases_resources(sample_html: str) -> None:
     assert doc.find("a") is None
     assert doc.xpath("//a") == []
     assert doc.xpath_first("//a") is None
+    assert doc.prettify() == ""
 
 
 def test_document_context_manager_closes(sample_html: str) -> None:

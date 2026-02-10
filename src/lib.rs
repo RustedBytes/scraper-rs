@@ -258,6 +258,11 @@ impl Element {
         evaluate_fragment_xpath_first(self.html(), expr)
     }
 
+    /// Return this element's outer HTML formatted with indentation.
+    pub fn prettify(&self) -> PyResult<String> {
+        prettify_fragment_html(&self.element_html)
+    }
+
     /// Convert this element to a plain dict.
     ///
     /// {
@@ -346,6 +351,189 @@ fn escape_html(value: &str) -> String {
         }
     }
     escaped
+}
+
+fn push_indent(out: &mut String, level: usize, indent_size: usize) {
+    let spaces = level.saturating_mul(indent_size);
+    out.reserve(spaces);
+    for _ in 0..spaces {
+        out.push(' ');
+    }
+}
+
+fn has_visible_text(text: &str) -> bool {
+    text.split_whitespace().next().is_some()
+}
+
+fn normalized_text(text: &str) -> String {
+    normalize_text_nodes(std::iter::once(text))
+}
+
+fn is_void_html_element(name: &str) -> bool {
+    matches!(
+        name,
+        "area"
+            | "base"
+            | "br"
+            | "col"
+            | "embed"
+            | "hr"
+            | "img"
+            | "input"
+            | "link"
+            | "meta"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
+    )
+}
+
+fn serialize_pretty_node_into(
+    out: &mut String,
+    node: XPathNode<'_>,
+    level: usize,
+    indent_size: usize,
+) {
+    let Some(element) = node.element() else {
+        return;
+    };
+
+    let name = element.name().local_part();
+    push_indent(out, level, indent_size);
+    out.push('<');
+    out.push_str(name);
+
+    for attr in element.attributes().iter() {
+        out.push(' ');
+        out.push_str(attr.name().local_part());
+        out.push('=');
+        out.push('"');
+        out.push_str(&escape_html(attr.value()));
+        out.push('"');
+    }
+
+    let children = node
+        .children()
+        .into_iter()
+        .filter(|child| {
+            child.element().is_some() || child.text().is_some_and(|t| has_visible_text(t.text()))
+        })
+        .collect::<Vec<_>>();
+
+    if children.is_empty() {
+        if is_void_html_element(name) {
+            out.push('>');
+        } else {
+            out.push_str("></");
+            out.push_str(name);
+            out.push('>');
+        }
+        out.push('\n');
+        return;
+    }
+
+    let has_element_children = children.iter().any(|child| child.element().is_some());
+    if !has_element_children
+        && children.len() == 1
+        && let Some(text) = children[0].text()
+    {
+        let normalized = normalized_text(text.text());
+        out.push('>');
+        out.push_str(&escape_html(&normalized));
+        out.push_str("</");
+        out.push_str(name);
+        out.push_str(">\n");
+        return;
+    }
+
+    out.push_str(">\n");
+
+    for child in children {
+        if child.element().is_some() {
+            serialize_pretty_node_into(out, child, level + 1, indent_size);
+            continue;
+        }
+
+        if let Some(text) = child.text() {
+            let normalized = normalized_text(text.text());
+            if normalized.is_empty() {
+                continue;
+            }
+            push_indent(out, level + 1, indent_size);
+            out.push_str(&escape_html(&normalized));
+            out.push('\n');
+        }
+    }
+
+    push_indent(out, level, indent_size);
+    out.push_str("</");
+    out.push_str(name);
+    out.push_str(">\n");
+}
+
+fn prettify_document_html(html: &str) -> PyResult<String> {
+    if !has_visible_text(html) {
+        return Ok(String::new());
+    }
+
+    let package = sxd_html::parse_html(html);
+    let document = package.as_document();
+    let Some(root) = find_first_element_by_name(document.root().into(), "html") else {
+        return Err(PyValueError::new_err(
+            "Failed to parse HTML document for prettify",
+        ));
+    };
+
+    let mut out = String::new();
+    serialize_pretty_node_into(&mut out, root, 0, 2);
+    if out.ends_with('\n') {
+        out.pop();
+    }
+    Ok(out)
+}
+
+fn prettify_fragment_html(html: &str) -> PyResult<String> {
+    if !has_visible_text(html) {
+        return Ok(String::new());
+    }
+
+    let mut wrapped =
+        String::with_capacity(html.len() + "<prettify-fragment></prettify-fragment>".len());
+    wrapped.push_str("<prettify-fragment>");
+    wrapped.push_str(html);
+    wrapped.push_str("</prettify-fragment>");
+
+    let package = sxd_html::parse_html(&wrapped);
+    let document = package.as_document();
+    let Some(wrapper) = find_first_element_by_name(document.root().into(), "prettify-fragment")
+    else {
+        return Err(PyValueError::new_err(
+            "Failed to parse HTML fragment for prettify",
+        ));
+    };
+
+    let mut out = String::new();
+    for child in wrapper.children() {
+        if child.element().is_some() {
+            serialize_pretty_node_into(&mut out, child, 0, 2);
+            continue;
+        }
+
+        if let Some(text) = child.text() {
+            let normalized = normalized_text(text.text());
+            if normalized.is_empty() {
+                continue;
+            }
+            out.push_str(&escape_html(&normalized));
+            out.push('\n');
+        }
+    }
+
+    if out.ends_with('\n') {
+        out.pop();
+    }
+    Ok(out)
 }
 
 fn serialize_node_into(buf: &mut String, node: XPathNode<'_>) {
@@ -680,6 +868,11 @@ impl Document {
         normalize_text_nodes(self.html.root_element().text())
     }
 
+    /// Return the current document HTML formatted with indentation.
+    pub fn prettify(&self) -> PyResult<String> {
+        prettify_document_html(&self.raw_html)
+    }
+
     /// Select all elements matching the given CSS selector.
     ///
     /// Returns a list[Element].
@@ -788,6 +981,21 @@ impl Drop for Document {
 #[pyo3(signature = (html, *, max_size_bytes=None, truncate_on_limit=false))]
 fn parse(html: &str, max_size_bytes: Option<usize>, truncate_on_limit: bool) -> PyResult<Document> {
     Document::from_html(html, max_size_bytes, truncate_on_limit)
+}
+
+#[pyfunction]
+#[pyo3(signature = (html, *, max_size_bytes=None, truncate_on_limit=false))]
+fn prettify(
+    py: Python<'_>,
+    html: &str,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<String> {
+    py.detach(|| {
+        let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
+        let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
+        prettify_document_html(html_to_parse.as_ref())
+    })
 }
 
 #[pyfunction]
@@ -1032,6 +1240,7 @@ fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Top-level functions
     m.add_function(wrap_pyfunction!(parse, m)?)?;
+    m.add_function(wrap_pyfunction!(prettify, m)?)?;
     m.add_function(wrap_pyfunction!(select, m)?)?;
     m.add_function(wrap_pyfunction!(select_first, m)?)?;
     m.add_function(wrap_pyfunction!(first, m)?)?;
