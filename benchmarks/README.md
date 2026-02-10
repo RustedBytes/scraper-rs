@@ -69,13 +69,6 @@ The benchmark shows the ratio between scraper-rs and markupever for each operati
 
 Note that for CPU-bound operations like HTML parsing, synchronous functions may be faster for sequential execution. However, async functions enable better responsiveness in I/O-bound applications and allow concurrent operations without blocking.
 
-## Recent Performance Improvements
-
-After optimizations (lazy XPath parsing, lazy property computation, atomic feature):
-- scraper-rs is now **1.6-3.4x** faster than before
-- scraper-rs is **1.8-3.4x slower** than markupever (down from 9-20x slower)
-- The performance gap has been significantly reduced while maintaining full XPath support
-
 ## Test run
 
 ### System
