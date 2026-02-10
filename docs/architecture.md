@@ -8,32 +8,40 @@ Async support lives in pure Python in `scraper_rs/asyncio.py`. It wraps the Rust
 
 ## Data flow (sync)
 
-1. Python calls `Document(...)` or a top-level helper like `select(...)` from the extension module.
-2. `Document::parse_with_limit` enforces size limits via `ensure_within_size_limit` in `src/lib.rs`.
-3. The HTML is parsed twice:
-   - `scraper::Html` for CSS selectors.
-   - `sxd_document::Package` (via `sxd_html::parse_html`) for XPath selectors.
-4. CSS selection uses `parse_selector` and `Html::select`, then converts results with `snapshot_element` into owned `Element` values.
-5. XPath selection uses `sxd_xpath::Factory` and `Context` to evaluate the expression, then converts nodes with `snapshot_xpath_element`. XPath inner HTML is built by `serialize_children` and `serialize_node_into`.
-6. `Element` stores owned strings and attribute maps, so it is safe to use on the Python side without Rust lifetimes.
+`Document` path:
+
+1. Python calls `Document(...)` or `Document.from_html(...)`.
+2. `Document::parse_with_limit` enforces size limits via `ensure_within_size_limit` in `src/lib.rs` (with optional truncation).
+3. Construction parses HTML once into `scraper::Html` for CSS selectors and stores the raw HTML string.
+4. CSS selection uses `parse_selector` and `Html::select`; parsed selectors are reused from a thread-local fixed-size cache (`SELECTOR_CACHE`).
+5. XPath parsing is lazy: the first `xpath(...)` / `xpath_first(...)` call runs `ensure_xpath_package`, which parses `raw_html` with `sxd_html::parse_html` and stores it in `xpath_package` for reuse.
+6. XPath expressions are compiled via `compile_xpath` and reused from a thread-local fixed-size cache (`XPATH_CACHE`).
+7. Selection results are converted into owned `Element` snapshots by `snapshot_element` / `snapshot_xpath_element`. `Element` computes `text`, inner `html`, and `attrs` lazily from stored element HTML on first access.
+
+Top-level helper path:
+
+- Functions like `select(...)` and `xpath(...)` call `*_with_limit` helpers and parse input per call (they do not reuse a persistent `Document` instance).
 
 Key code references:
 - Parsing and size limits: `src/lib.rs` (`DEFAULT_MAX_PARSE_BYTES`, `ensure_within_size_limit`, `Document::parse_with_limit`)
-- CSS selection: `src/lib.rs` (`parse_selector`, `select_fragment`, `snapshot_element`)
-- XPath selection: `src/lib.rs` (`evaluate_xpath_nodes`, `evaluate_xpath_elements`, `snapshot_xpath_element`)
+- CSS selection and selector cache: `src/lib.rs` (`SELECTOR_CACHE`, `parse_selector`, `snapshot_element`)
+- Lazy XPath setup and XPath cache: `src/lib.rs` (`ensure_xpath_package`, `XPATH_CACHE`, `compile_xpath`)
+- XPath selection and serialization: `src/lib.rs` (`evaluate_xpath_nodes`, `snapshot_xpath_element`, `serialize_node_into`)
 
 ## Data flow (async)
 
 The async layer is a thin wrapper over the sync API:
 
 - The Python module `scraper_rs/asyncio.py` exposes `AsyncDocument` and `AsyncElement`.
-- Top-level async functions (`select`, `xpath`, `select_first`, etc) call Rust helpers in `src/lib.rs` such as `select_async` and `xpath_async`.
+- Top-level async functions (`select`, `xpath`, `select_first`, `first`, etc) call Rust helpers in `src/lib.rs` such as `select_async`, `first_async`, and `xpath_async`.
 - The Rust async helpers use `pyo3_async_runtimes::tokio::future_into_py_with_locals` and `tokio::task::spawn_blocking` to run blocking parsing and selection on a thread pool.
+- `parse` is implemented in Python (`asyncio.sleep(0)` + sync `Document(...)` construction).
+- `AsyncDocument` / `AsyncElement` selector methods pass HTML strings into Rust async helpers, so selectors parse per call rather than reusing the wrapped `Document` DOM.
 - Nested async selection on elements is implemented via `_select_fragment_async` and `_xpath_fragment_async` in `src/lib.rs`, which parse the element's inner HTML as a fragment.
 
 Code references:
 - Async wrappers: `scraper_rs/asyncio.py`
-- Rust async entry points: `src/lib.rs` (`select_async`, `select_first_async`, `xpath_async`, `xpath_first_async`)
+- Rust async entry points: `src/lib.rs` (`select_async`, `select_first_async`, `first_async`, `xpath_async`, `xpath_first_async`)
 - Fragment helpers: `src/lib.rs` (`_select_fragment_async`, `_xpath_fragment_async`)
 
 ## Module wiring

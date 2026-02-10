@@ -61,6 +61,33 @@ Tests are run against three HTML document sizes:
 
 The benchmark shows the ratio between scraper-rs and markupever for each operation. Lower ratios indicate better relative performance.
 
+### bench_parse_memory.py
+
+Measures parser memory usage with progressively larger HTML documents.
+
+- Runs each HTML size in an isolated subprocess (prevents memory carry-over between sizes)
+- Uses progressive size steps (default: 2 KiB to 8 MiB, doubling each step)
+- Reports per-size parse latency (`median`/`p95`) and RSS memory (`baseline`, `peak`, `delta`)
+- Scales iteration count by input size to keep total parsed volume realistic
+
+Run with defaults:
+
+```shell
+uv run benchmarks/bench_parse_memory.py
+```
+
+Run with custom progression:
+
+```shell
+uv run benchmarks/bench_parse_memory.py --min-kib 4 --max-kib 16384 --growth-factor 2
+```
+
+Run with explicit size steps:
+
+```shell
+uv run benchmarks/bench_parse_memory.py --sizes 4k,16k,64k,256k,1m,4m
+```
+
 ## Interpreting Results
 
 - **Sync functions**: Best for sequential, CPU-bound operations
@@ -362,4 +389,56 @@ Key observations:
 - scraper-rs uses lazy property computation for Element attributes
 - Ratios < 2.0x indicate scraper-rs is competitive with markupever
 - The 'atomic' feature is enabled for enhanced thread safety
+```
+
+## Running memory usage benchmark
+
+Command:
+
+```shell
+uv run benchmarks/bench_parse_memory.py
+```
+
+Output:
+
+```
+==============================================================================================
+scraper-rs Parse Memory Benchmark (progressive HTML sizes)
+==============================================================================================
+Sizes: 2.00 KiB -> 8.00 MiB (growth factor 2)
+Iterations per size: scaled to ~64 MiB parsed (min=5, max=120)
+
+[run] target=  2.00 KiB iterations=120 warmup=3
+[run] target=  4.00 KiB iterations=120 warmup=3
+[run] target=  8.00 KiB iterations=120 warmup=3
+[run] target= 16.00 KiB iterations=120 warmup=3
+[run] target= 32.00 KiB iterations=120 warmup=3
+[run] target= 64.00 KiB iterations=120 warmup=3
+[run] target=128.00 KiB iterations=120 warmup=3
+[run] target=256.00 KiB iterations=120 warmup=3
+[run] target=512.00 KiB iterations=120 warmup=3
+[run] target=  1.00 MiB iterations= 64 warmup=3
+[run] target=  2.00 MiB iterations= 32 warmup=3
+[run] target=  4.00 MiB iterations= 16 warmup=3
+[run] target=  8.00 MiB iterations=  8 warmup=3
+
+  Input Size   Runs  Median ms   P95 ms   Base RSS   Peak RSS  Delta RSS Delta/Input
+----------------------------------------------------------------------------------------------
+    2.00 KiB    120      0.023    0.025      26.44      26.98       0.54      276.00x
+    4.00 KiB    120      0.046    0.052      26.48      27.04       0.56      143.00x
+    8.00 KiB    120      0.094    0.099      26.55      26.96       0.41       52.50x
+   16.00 KiB    120      0.173    0.176      26.64      27.31       0.67       42.75x
+   32.00 KiB    120      0.344    0.349      26.90      27.80       0.90       28.75x
+   64.00 KiB    120      0.689    0.693      27.30      28.54       1.24       19.81x
+  128.00 KiB    120      1.364    1.396      29.30      29.80       0.50        3.97x
+  256.00 KiB    120      2.718    2.754      32.11      32.61       0.50        2.00x
+  512.00 KiB    120      5.464    5.506      38.34      38.84       0.50        1.00x
+    1.00 MiB     64     10.788   10.848      50.72      51.21       0.49        0.49x
+    2.00 MiB     32     24.582   24.741      42.17      59.91      17.73        8.87x
+    4.00 MiB     16     49.237   50.122      58.01      92.81      34.80        8.70x
+    8.00 MiB      8     99.926  100.284      89.30     158.23      68.93        8.62x
+
+Notes:
+- Each size runs in a fresh subprocess to keep RSS measurements isolated.
+- Delta RSS is peak RSS minus baseline RSS measured around the parse loop.
 ```

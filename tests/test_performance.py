@@ -71,7 +71,7 @@ def test_lazy_element_properties(large_html: str) -> None:
     # Get elements but don't access any properties yet
     start = time.perf_counter()
     items = doc.select(".item")
-    select_time = time.perf_counter() - start
+    _ = time.perf_counter() - start
 
     assert len(items) == 1000
 

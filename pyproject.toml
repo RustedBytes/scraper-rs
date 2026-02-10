@@ -46,4 +46,5 @@ dev = [
     "maturin",
     "pytest",
     "pytest-asyncio>=1.3.0",
+    "ruff>=0.15.0",
 ]

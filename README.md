@@ -47,7 +47,7 @@ For a runnable sample, see `examples/demo.py`.
 
 ### Async usage
 
-The `scraper_rs.asyncio` module wraps the top-level helpers to keep the event loop responsive. `parse` yields to the event loop between operations, while `select`/`xpath` run in a thread pool. Parsed documents and elements are wrapped with awaitable selector methods for nested queries:
+The `scraper_rs.asyncio` module keeps the event loop responsive. `parse` yields once (`asyncio.sleep(0)`) before constructing a sync `Document` in the current thread, while `select`/`xpath` helpers run in a thread pool. Parsed documents and elements are wrapped with awaitable selector methods for nested queries:
 
 ```py
 import asyncio
@@ -99,10 +99,10 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 
 ## API highlights
 
-- `Document(html: str)` / `Document.from_html(html)` parses once and keeps the DOM.
+- `Document(html: str)` / `Document.from_html(html)` parse HTML for CSS and keep the DOM; XPath parsing is initialized lazily on first XPath query.
 - `.select(css)` → `list[Element]`, `.select_first(css)` / `.find(css)` → first `Element | None`, `.css(css)` is an alias.
 - `.xpath(expr)` / `.xpath_first(expr)` evaluate XPath expressions that return element nodes.
-- `.text` returns normalized text; `.html` returns the element's HTML.
+- `.text` returns normalized text; `Document.html` is the original input HTML; `Element.html` is inner HTML.
 - `scraper_rs.asyncio` exposes async `parse`/`select`/`xpath` wrappers to keep the event loop responsive.
 - `Element` exposes `.tag`, `.text`, `.html`, `.attrs` plus helpers `.attr(name)`, `.get(name, default)`, `.to_dict()`.
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
@@ -124,7 +124,7 @@ pip install maturin
 maturin build --release --compatibility linux
 
 # Install the generated wheel
-pip install target/wheels/scraper_rs-*.whl
+pip install target/wheels/scraper_rust-*.whl
 ```
 
 If you have `just` installed, the repo includes helpers: `just build` (local wheel), `just install-wheel` (install the built wheel), and `just build_manylinux` (via the official maturin Docker image).
@@ -135,10 +135,11 @@ If you have `just` installed, the repo includes helpers: `just build` (local whe
 
 ## Development
 
-Requirements: Rust toolchain, Python 3.10+, `maturin`, and `pytest` for tests.
+Requirements: Rust toolchain, Python 3.10+, `maturin`, `pytest`, and `pytest-asyncio` for tests.
 
-- Run tests: `just test` or `uv run pytest tests/test_scraper.py`
-- Format/typing: The codebase is small; formatters are not strictly enforced yet.
+- Run tests: `just test` or `uv run pytest tests/`
+- Format code: `just fmt` (or `cargo fmt --all` and `uv run ruff format`)
+- Lint Rust: `just lint` (or `cargo clippy --all-targets --all-features -- -D warnings`)
 - The PyO3 module name is `scraper_rs`; the Rust crate is built as `cdylib`.
 
 Contributions and issues are welcome. If you add public API, please extend `tests/test_scraper.py` and the example script accordingly.

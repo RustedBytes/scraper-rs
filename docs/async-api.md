@@ -10,7 +10,7 @@ The async API lives in `scraper_rs/asyncio.py` and provides awaitable wrappers a
 
 Implementation references:
 - Python wrappers: `scraper_rs/asyncio.py`
-- Rust async helpers: `src/lib.rs` (`select_async`, `select_first_async`, `xpath_async`, `xpath_first_async`)
+- Rust async helpers: `src/lib.rs` (`select_async`, `select_first_async`, `first_async`, `xpath_async`, `xpath_first_async`)
 
 ## Top-level async functions
 
@@ -56,6 +56,7 @@ async with doc:
 - `scraper_rs/asyncio.py` calls Rust helpers such as `select_async` and `xpath_async`.
 - In `src/lib.rs`, each async helper uses `pyo3_async_runtimes::tokio::future_into_py_with_locals` and `tokio::task::spawn_blocking` to run parsing and selection on a thread pool.
 - `parse` is implemented in Python: it yields to the event loop with `asyncio.sleep(0)` and then constructs a sync `Document` in the current thread.
+- `AsyncDocument` and `AsyncElement` methods pass HTML strings into Rust async helpers, so each async selector call re-parses HTML/fragment input.
 
 ## Nested selection on AsyncElement
 

@@ -20,6 +20,7 @@ Key properties and methods (see `src/lib.rs` and `scraper_rs.pyi`):
 
 - `html`: the original HTML string stored by the `Document`.
 - `text`: normalized text content (whitespace collapsed).
+- `from_html(...)`: alternate constructor with the same keyword arguments as `Document(...)`.
 - `select(css) -> list[Element]`: CSS selection over the whole document.
 - `select_first(css) -> Element | None`: first CSS match.
 - `find(css) -> Element | None`: alias for `select_first`.
@@ -54,7 +55,7 @@ with Document(html) as doc:
 
 ## Element
 
-`Element` is a snapshot of a matched HTML element. It stores owned data (tag, text, inner HTML, and attributes) so it is safe to use after selection (see `snapshot_element` and `snapshot_xpath_element` in `src/lib.rs`).
+`Element` is a snapshot of a matched HTML element. It stores owned `tag` and serialized element HTML eagerly, then computes `text`, `html` (inner HTML), and `attrs` lazily on first access. This keeps Python usage lifetime-safe while reducing upfront allocations (see `snapshot_element` and `snapshot_xpath_element` in `src/lib.rs`).
 
 Fields and methods:
 
@@ -108,6 +109,7 @@ first = xpath_first(html, "//div[@class='item']/a")
 
 - `Element.html` is the inner HTML (children only), not the outer tag.
 - `text` values are normalized by collapsing whitespace.
+- `Document` parses HTML for CSS at construction; XPath DOM parsing is deferred until the first `xpath(...)` / `xpath_first(...)` call.
 - XPath expressions must return element nodes; attribute or text results raise `ValueError`.
 - Invalid CSS or XPath expressions raise `ValueError` from the Rust layer.
 

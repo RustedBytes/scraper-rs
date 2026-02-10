@@ -68,7 +68,7 @@ except ValueError as exc:
 
 ### XPath errors
 
-Invalid XPath expressions or expressions that do not return a node set raise `ValueError` from `evaluate_xpath_nodes` in `src/lib.rs`. XPath queries must return element nodes; attribute or text results are not supported (see `snapshot_xpath_element`).
+Invalid XPath expressions (including empty expressions) raise `ValueError` during compilation/evaluation in `src/lib.rs` (`compile_xpath`, `evaluate_xpath_nodes`, `evaluate_xpath_first_element`). XPath queries must evaluate to node sets of element nodes; attribute or text nodes are rejected during conversion (`snapshot_xpath_element`).
 
 ```py
 from scraper_rs import Document
@@ -82,7 +82,7 @@ except ValueError as exc:
 
 ## Document lifecycle
 
-`Document.close()` explicitly releases DOM allocations and clears the stored HTML. After closing, selectors return no results and `html`/`text` are empty (validated in `tests/test_scraper.py`). `Document` also acts as a context manager:
+`Document.close()` explicitly releases DOM allocations (including the lazily built XPath package) and clears stored HTML. It is idempotent. After closing, selectors return no results and `html`/`text` are empty (validated in `tests/test_scraper.py`). `Document` also acts as a context manager:
 
 ```py
 from scraper_rs import Document
