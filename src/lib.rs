@@ -120,19 +120,24 @@ where
     out
 }
 
-fn collect_xpath_text(node: XPathNode<'_>, out: &mut String, needs_space: &mut bool) {
-    if let Some(text) = node.text() {
-        push_normalized(out, text.text(), needs_space);
-    }
-
-    for child in node.children() {
-        collect_xpath_text(child, out, needs_space);
-    }
+fn inner_html_from_element_html(element_html: &str) -> String {
+    let fragment = Html::parse_fragment(element_html);
+    fragment
+        .root_element()
+        .children()
+        .find_map(ElementRef::wrap)
+        .map(|el| el.inner_html())
+        .unwrap_or_default()
 }
 
-fn text_from_html_fragment(html: &str) -> String {
-    let fragment = Html::parse_fragment(html);
-    normalize_text_nodes(fragment.root_element().text())
+fn text_from_element_html(element_html: &str) -> String {
+    let fragment = Html::parse_fragment(element_html);
+    fragment
+        .root_element()
+        .children()
+        .find_map(ElementRef::wrap)
+        .map(|el| normalize_text_nodes(el.text()))
+        .unwrap_or_default()
 }
 
 fn attrs_from_element_html(element_html: &str) -> HashMap<String, String> {
@@ -151,32 +156,13 @@ fn attrs_from_element_html(element_html: &str) -> HashMap<String, String> {
     attrs
 }
 
-fn attrs_from_element_ref(el: &ElementRef<'_>) -> HashMap<String, String> {
-    let mut attrs = HashMap::new();
-    for (name, value) in el.value().attrs() {
-        attrs.insert(name.to_string(), value.to_string());
-    }
-    attrs
-}
-
-fn attrs_from_xpath_element(element: sxd_document::dom::Element<'_>) -> HashMap<String, String> {
-    let mut attrs = HashMap::new();
-    for attr in element.attributes().iter() {
-        attrs.insert(
-            attr.name().local_part().to_string(),
-            attr.value().to_string(),
-        );
-    }
-    attrs
-}
-
 /// A single HTML element returned by a CSS selection.
 ///
-/// This is a *snapshot* of an element: it stores tag, text, inner HTML
-/// and attributes, all as owned data, so there are no lifetime issues
-/// when used from Python.
+/// This is a *snapshot* of an element: it stores tag and serialized outer HTML
+/// eagerly, and computes text/inner HTML/attributes lazily as owned data.
+/// This keeps Python usage lifetime-safe while reducing upfront allocations.
 ///
-/// Properties are cached on first access (or eagerly for snapshots) for speed.
+/// Properties are cached on first access for speed and reduced memory pressure.
 ///
 /// Note: This struct is NOT Clone because cached fields use OnceLock for
 /// thread-safe interior mutability (required for async support).
@@ -184,14 +170,13 @@ fn attrs_from_xpath_element(element: sxd_document::dom::Element<'_>) -> HashMap<
 #[pyclass(module = "scraper_rs")]
 pub struct Element {
     tag: String,
-    inner_html: String,
+    // Full serialized element HTML, kept as the only eagerly allocated HTML payload.
+    element_html: String,
     // Cached fields stored in OnceLock for fast, thread-safe access.
-    // Values are computed eagerly for CSS/XPath snapshots, or lazily from HTML as needed.
+    // Values are computed lazily from element_html on first access.
+    inner_html: OnceLock<String>,
     text: OnceLock<String>,
     attrs: OnceLock<HashMap<String, String>>,
-    // Store raw HTML element data for nested selections and lazy computation.
-    // This avoids re-parsing when only specific properties are accessed.
-    element_html: String,
 }
 
 #[pymethods]
@@ -206,14 +191,15 @@ impl Element {
     #[getter]
     pub fn text(&self) -> String {
         self.text
-            .get_or_init(|| text_from_html_fragment(&self.element_html))
+            .get_or_init(|| text_from_element_html(&self.element_html))
             .clone()
     }
 
     /// Inner HTML of the element (children only, not the outer tag).
     #[getter]
     pub fn html(&self) -> &str {
-        &self.inner_html
+        self.inner_html
+            .get_or_init(|| inner_html_from_element_html(&self.element_html))
     }
 
     /// Mapping of HTML attributes, e.g. {"href": "...", "class": "..."}.
@@ -242,12 +228,12 @@ impl Element {
     ///     item = doc.find(".item")
     ///     links = item.select("a[href]")
     pub fn select(&self, css: &str) -> PyResult<Vec<Element>> {
-        select_fragment(&self.inner_html, css)
+        select_fragment(self.html(), css)
     }
 
     /// Return the first matching descendant element, or None if nothing matches.
     pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
-        select_fragment_first(&self.inner_html, css)
+        select_fragment_first(self.html(), css)
     }
 
     /// Return the first matching descendant element, or None if nothing matches.
@@ -264,12 +250,12 @@ impl Element {
     ///
     /// The XPath runs inside this element; expressions must return element nodes.
     pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
-        evaluate_fragment_xpath(&self.inner_html, expr)
+        evaluate_fragment_xpath(self.html(), expr)
     }
 
     /// Return the first matching descendant for an XPath expression, or None.
     pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
-        evaluate_fragment_xpath_first(&self.inner_html, expr)
+        evaluate_fragment_xpath_first(self.html(), expr)
     }
 
     /// Convert this element to a plain dict.
@@ -284,7 +270,7 @@ impl Element {
         let dict = PyDict::new(py);
         dict.set_item("tag", &self.tag)?;
         dict.set_item("text", self.text())?;
-        dict.set_item("html", &self.inner_html)?;
+        dict.set_item("html", self.html())?;
         dict.set_item("attrs", self.attrs())?;
         Ok(dict.into())
     }
@@ -300,23 +286,16 @@ impl Element {
 /// Convert a scraper ElementRef into our owned Element snapshot.
 fn snapshot_element(el: ElementRef<'_>) -> Element {
     let tag = el.value().name().to_string();
-    let inner_html = el.inner_html();
-    let text = normalize_text_nodes(el.text());
-    let attrs = attrs_from_element_ref(&el);
-
-    // Store the full element HTML for lazy computation and nested selections
+    // Store only the full element HTML; derive other fields lazily to reduce
+    // per-element memory when callers only touch a subset of properties.
     let element_html = el.html();
-    let text_cache = OnceLock::new();
-    let _ = text_cache.set(text);
-    let attrs_cache = OnceLock::new();
-    let _ = attrs_cache.set(attrs);
 
     Element {
         tag,
-        inner_html,
         element_html,
-        text: text_cache,
-        attrs: attrs_cache,
+        inner_html: OnceLock::new(),
+        text: OnceLock::new(),
+        attrs: OnceLock::new(),
     }
 }
 
@@ -402,37 +381,79 @@ fn snapshot_xpath_element(node: XPathNode<'_>) -> PyResult<Element> {
     })?;
 
     let tag = element.name().local_part().to_string();
-    let inner_html = {
-        let mut buf = String::new();
-        for child in node.children() {
-            serialize_node_into(&mut buf, child);
-        }
-        buf
-    };
     let element_html = {
         let mut buf = String::new();
         serialize_node_into(&mut buf, node);
         buf
     };
-    let text = {
-        let mut out = String::new();
-        let mut needs_space = false;
-        collect_xpath_text(node, &mut out, &mut needs_space);
-        out
-    };
-    let attrs = attrs_from_xpath_element(element);
-    let text_cache = OnceLock::new();
-    let _ = text_cache.set(text);
-    let attrs_cache = OnceLock::new();
-    let _ = attrs_cache.set(attrs);
 
     Ok(Element {
         tag,
-        inner_html,
         element_html,
-        text: text_cache,
-        attrs: attrs_cache,
+        inner_html: OnceLock::new(),
+        text: OnceLock::new(),
+        attrs: OnceLock::new(),
     })
+}
+
+fn select_with_limit(
+    html: &str,
+    css: &str,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Vec<Element>> {
+    let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
+    let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
+    let selector = parse_selector(css)?;
+    let parsed = Html::parse_document(html_to_parse.as_ref());
+
+    Ok(parsed
+        .select(selector.as_ref())
+        .map(snapshot_element)
+        .collect::<Vec<_>>())
+}
+
+fn select_first_with_limit(
+    html: &str,
+    css: &str,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Option<Element>> {
+    let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
+    let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
+    let selector = parse_selector(css)?;
+    let parsed = Html::parse_document(html_to_parse.as_ref());
+
+    Ok(parsed
+        .select(selector.as_ref())
+        .next()
+        .map(snapshot_element))
+}
+
+fn xpath_with_limit(
+    html: &str,
+    expr: &str,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Vec<Element>> {
+    let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
+    let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
+    let package = sxd_html::parse_html(html_to_parse.as_ref());
+    let document = package.as_document();
+    evaluate_xpath_elements(document.root().into(), expr)
+}
+
+fn xpath_first_with_limit(
+    html: &str,
+    expr: &str,
+    max_size_bytes: Option<usize>,
+    truncate_on_limit: bool,
+) -> PyResult<Option<Element>> {
+    let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
+    let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
+    let package = sxd_html::parse_html(html_to_parse.as_ref());
+    let document = package.as_document();
+    evaluate_xpath_first_element(document.root().into(), expr)
 }
 
 fn compile_xpath(expr: &str) -> PyResult<Rc<XPath>> {
@@ -778,10 +799,7 @@ fn select(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Vec<Element>> {
-    py.detach(|| {
-        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-        doc.select(css)
-    })
+    py.detach(|| select_with_limit(html, css, max_size_bytes, truncate_on_limit))
 }
 
 #[pyfunction]
@@ -793,10 +811,7 @@ fn select_first(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
-    py.detach(|| {
-        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-        doc.select_first(css)
-    })
+    py.detach(|| select_first_with_limit(html, css, max_size_bytes, truncate_on_limit))
 }
 
 #[pyfunction]
@@ -808,10 +823,7 @@ fn first(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
-    py.detach(|| {
-        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-        doc.select_first(css)
-    })
+    py.detach(|| select_first_with_limit(html, css, max_size_bytes, truncate_on_limit))
 }
 
 #[pyfunction]
@@ -823,10 +835,7 @@ fn xpath(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Vec<Element>> {
-    py.detach(|| {
-        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-        doc.xpath(expr)
-    })
+    py.detach(|| xpath_with_limit(html, expr, max_size_bytes, truncate_on_limit))
 }
 
 #[pyfunction]
@@ -838,10 +847,7 @@ fn xpath_first(
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
 ) -> PyResult<Option<Element>> {
-    py.detach(|| {
-        let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-        doc.xpath_first(expr)
-    })
+    py.detach(|| xpath_first_with_limit(html, expr, max_size_bytes, truncate_on_limit))
 }
 
 // Async versions using pyo3-async-runtimes
@@ -859,10 +865,7 @@ fn select_async(
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
-                py.detach(|| {
-                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
-                    doc.select(&css)
-                })
+                py.detach(|| select_with_limit(&html, &css, max_size_bytes, truncate_on_limit))
             })
         })
         .await
@@ -884,8 +887,7 @@ fn select_first_async(
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
                 py.detach(|| {
-                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
-                    doc.select_first(&css)
+                    select_first_with_limit(&html, &css, max_size_bytes, truncate_on_limit)
                 })
             })
         })
@@ -908,8 +910,7 @@ fn first_async(
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
                 py.detach(|| {
-                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
-                    doc.select_first(&css)
+                    select_first_with_limit(&html, &css, max_size_bytes, truncate_on_limit)
                 })
             })
         })
@@ -931,10 +932,7 @@ fn xpath_async(
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
-                py.detach(|| {
-                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
-                    doc.xpath(&expr)
-                })
+                py.detach(|| xpath_with_limit(&html, &expr, max_size_bytes, truncate_on_limit))
             })
         })
         .await
@@ -956,8 +954,7 @@ fn xpath_first_async(
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| {
                 py.detach(|| {
-                    let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
-                    doc.xpath_first(&expr)
+                    xpath_first_with_limit(&html, &expr, max_size_bytes, truncate_on_limit)
                 })
             })
         })
