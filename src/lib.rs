@@ -61,10 +61,6 @@ thread_local! {
         RefCell::new(FixedCache::new(XPATH_CACHE_CAPACITY));
 }
 
-fn effective_max_size(max_size_bytes: Option<usize>) -> usize {
-    max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES)
-}
-
 fn ensure_within_size_limit<'a>(
     html: &'a str,
     max_size_bytes: usize,
@@ -121,13 +117,6 @@ where
     for chunk in chunks {
         push_normalized(&mut out, chunk, &mut needs_space);
     }
-    out
-}
-
-fn normalize_xpath_text(node: XPathNode<'_>) -> String {
-    let mut out = String::new();
-    let mut needs_space = false;
-    collect_xpath_text(node, &mut out, &mut needs_space);
     out
 }
 
@@ -407,29 +396,30 @@ fn serialize_node_into(buf: &mut String, node: XPathNode<'_>) {
     }
 }
 
-fn serialize_children(node: XPathNode<'_>) -> String {
-    let mut buf = String::new();
-    for child in node.children() {
-        serialize_node_into(&mut buf, child);
-    }
-    buf
-}
-
-fn serialize_element(node: XPathNode<'_>) -> String {
-    let mut buf = String::new();
-    serialize_node_into(&mut buf, node);
-    buf
-}
-
 fn snapshot_xpath_element(node: XPathNode<'_>) -> PyResult<Element> {
     let element = node.element().ok_or_else(|| {
         PyValueError::new_err("XPath expression must return element nodes for conversion")
     })?;
 
     let tag = element.name().local_part().to_string();
-    let inner_html = serialize_children(node);
-    let element_html = serialize_element(node);
-    let text = normalize_xpath_text(node);
+    let inner_html = {
+        let mut buf = String::new();
+        for child in node.children() {
+            serialize_node_into(&mut buf, child);
+        }
+        buf
+    };
+    let element_html = {
+        let mut buf = String::new();
+        serialize_node_into(&mut buf, node);
+        buf
+    };
+    let text = {
+        let mut out = String::new();
+        let mut needs_space = false;
+        collect_xpath_text(node, &mut out, &mut needs_space);
+        out
+    };
     let attrs = attrs_from_xpath_element(element);
     let text_cache = OnceLock::new();
     let _ = text_cache.set(text);
@@ -578,7 +568,7 @@ impl Document {
         max_size_bytes: Option<usize>,
         truncate_on_limit: bool,
     ) -> PyResult<Self> {
-        let max_size_bytes = effective_max_size(max_size_bytes);
+        let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
         let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
 
         // Only parse with html5ever (for CSS selectors)
@@ -820,7 +810,7 @@ fn first(
 ) -> PyResult<Option<Element>> {
     py.detach(|| {
         let doc = Document::from_html(html, max_size_bytes, truncate_on_limit)?;
-        doc.find(css)
+        doc.select_first(css)
     })
 }
 
@@ -919,7 +909,7 @@ fn first_async(
             Python::attach(|py| {
                 py.detach(|| {
                     let doc = Document::from_html(&html, max_size_bytes, truncate_on_limit)?;
-                    doc.find(&css)
+                    doc.select_first(&css)
                 })
             })
         })
