@@ -8,8 +8,8 @@ name = "scraper_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"] }
-pyo3-async-runtimes = { version = "0.27", features = ["tokio-runtime"] }
+pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
+pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["rt", "macros"] }
 
 scraper = { version = "0.25", features = ["atomic"] }
