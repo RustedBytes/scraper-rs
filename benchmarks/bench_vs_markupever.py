@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Benchmark script comparing scraper-rs with markupever.
 

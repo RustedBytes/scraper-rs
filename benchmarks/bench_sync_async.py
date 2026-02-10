@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Benchmark script to compare sync vs async performance of scraper_rs functions.
 
