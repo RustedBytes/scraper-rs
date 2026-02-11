@@ -63,11 +63,11 @@ thread_local! {
         RefCell::new(FixedCache::new(XPATH_CACHE_CAPACITY));
 }
 
-fn ensure_within_size_limit<'a>(
-    html: &'a str,
+fn ensure_within_size_limit(
+    html: &str,
     max_size_bytes: usize,
     truncate_on_limit: bool,
-) -> PyResult<Cow<'a, str>> {
+) -> PyResult<Cow<'_, str>> {
     let len_bytes = html.len();
     if len_bytes > max_size_bytes {
         if truncate_on_limit {
@@ -77,11 +77,10 @@ fn ensure_within_size_limit<'a>(
                 truncate_at -= 1;
             }
             return Ok(Cow::Owned(html[..truncate_at].to_string()));
-        } else {
-            return Err(PyValueError::new_err(format!(
-                "HTML document is too large to parse: {len_bytes} bytes exceeds max_size_bytes={max_size_bytes}"
-            )));
         }
+        return Err(PyValueError::new_err(format!(
+            "HTML document is too large to parse: {len_bytes} bytes exceeds max_size_bytes={max_size_bytes}"
+        )));
     }
 
     Ok(Cow::Borrowed(html))
@@ -166,16 +165,16 @@ fn attrs_from_element_html(element_html: &str) -> HashMap<String, String> {
 ///
 /// Properties are cached on first access for speed and reduced memory pressure.
 ///
-/// Note: This struct is NOT Clone because cached fields use OnceLock for
+/// Note: This struct is NOT Clone because cached fields use `OnceLock` for
 /// thread-safe interior mutability (required for async support).
-/// If cloning is needed, use to_dict() and reconstruct.
+/// If cloning is needed, use `to_dict()` and reconstruct.
 #[pyclass(module = "scraper_rs")]
 pub struct Element {
     tag: String,
     // Full serialized element HTML, kept as the only eagerly allocated HTML payload.
-    element_html: String,
+    outer_html: String,
     // Cached fields stored in OnceLock for fast, thread-safe access.
-    // Values are computed lazily from element_html on first access.
+    // Values are computed lazily from outer_html on first access.
     inner_html: OnceLock<String>,
     text: OnceLock<String>,
     attrs: OnceLock<HashMap<String, String>>,
@@ -193,7 +192,7 @@ impl Element {
     #[getter]
     pub fn text(&self) -> String {
         self.text
-            .get_or_init(|| text_from_element_html(&self.element_html))
+            .get_or_init(|| text_from_element_html(&self.outer_html))
             .clone()
     }
 
@@ -201,21 +200,21 @@ impl Element {
     #[getter]
     pub fn html(&self) -> &str {
         self.inner_html
-            .get_or_init(|| inner_html_from_element_html(&self.element_html))
+            .get_or_init(|| inner_html_from_element_html(&self.outer_html))
     }
 
     /// Mapping of HTML attributes, e.g. {"href": "...", "class": "..."}.
     #[getter]
     pub fn attrs(&self) -> HashMap<String, String> {
         self.attrs
-            .get_or_init(|| attrs_from_element_html(&self.element_html))
+            .get_or_init(|| attrs_from_element_html(&self.outer_html))
             .clone()
     }
 
     /// Return the value of a single attribute, or None if it doesn't exist.
     pub fn attr(&self, name: &str) -> Option<String> {
         self.attrs
-            .get_or_init(|| attrs_from_element_html(&self.element_html))
+            .get_or_init(|| attrs_from_element_html(&self.outer_html))
             .get(name)
             .cloned()
     }
@@ -229,40 +228,68 @@ impl Element {
     ///
     ///     item = doc.find(".item")
     ///     links = item.select("a[href]")
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `css` is not a valid CSS selector.
     pub fn select(&self, css: &str) -> PyResult<Vec<Element>> {
         select_fragment(self.html(), css)
     }
 
     /// Return the first matching descendant element, or None if nothing matches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `css` is not a valid CSS selector.
     pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
         select_fragment_first(self.html(), css)
     }
 
     /// Return the first matching descendant element, or None if nothing matches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `css` is not a valid CSS selector.
     pub fn find(&self, css: &str) -> PyResult<Option<Element>> {
         self.select_first(css)
     }
 
     /// Alias for `select(css)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `css` is not a valid CSS selector.
     pub fn css(&self, css: &str) -> PyResult<Vec<Element>> {
         self.select(css)
     }
 
-    /// Evaluate an XPath expression against this element's children.
+    /// Evaluate an `XPath` expression against this element's children.
     ///
-    /// The XPath runs inside this element; expressions must return element nodes.
+    /// The `XPath` runs inside this element; expressions must return element nodes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression is invalid or does not evaluate to element nodes.
     pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
         evaluate_fragment_xpath(self.html(), expr)
     }
 
-    /// Return the first matching descendant for an XPath expression, or None.
+    /// Return the first matching descendant for an `XPath` expression, or None.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression is invalid or does not evaluate to element nodes.
     pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
         evaluate_fragment_xpath_first(self.html(), expr)
     }
 
     /// Return this element's outer HTML formatted with indentation.
+    ///
+    /// # Errors
+    ///
+    /// This currently does not return errors, but the `PyResult` is preserved for API consistency.
     pub fn prettify(&self) -> PyResult<String> {
-        prettify_fragment_html(&self.element_html)
+        prettify_fragment_html(&self.outer_html)
     }
 
     /// Convert this element to a plain dict.
@@ -273,6 +300,10 @@ impl Element {
     ///   "html": str,
     ///   "attrs": {str: str}
     /// }
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Python dictionary construction fails.
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("tag", &self.tag)?;
@@ -290,16 +321,16 @@ impl Element {
     }
 }
 
-/// Convert a scraper ElementRef into our owned Element snapshot.
+/// Convert a scraper `ElementRef` into our owned Element snapshot.
 fn snapshot_element(el: ElementRef<'_>) -> Element {
     let tag = el.value().name().to_string();
     // Store only the full element HTML; derive other fields lazily to reduce
     // per-element memory when callers only touch a subset of properties.
-    let element_html = el.html();
+    let outer_html = el.html();
 
     Element {
         tag,
-        element_html,
+        outer_html,
         inner_html: OnceLock::new(),
         text: OnceLock::new(),
         attrs: OnceLock::new(),
@@ -483,9 +514,9 @@ fn serialize_pretty_element_into(
     out.push_str(">\n");
 }
 
-fn prettify_document_html(html: &str) -> PyResult<String> {
+fn prettify_document_html(html: &str) -> String {
     if !has_visible_text(html) {
-        return Ok(String::new());
+        return String::new();
     }
 
     let parsed = Html::parse_document(html);
@@ -496,7 +527,7 @@ fn prettify_document_html(html: &str) -> PyResult<String> {
     if out.ends_with('\n') {
         out.pop();
     }
-    Ok(out)
+    out
 }
 
 fn prettify_fragment_html(html: &str) -> PyResult<String> {
@@ -512,14 +543,14 @@ fn prettify_fragment_html(html: &str) -> PyResult<String> {
 
     let parsed = Html::parse_document(&wrapped);
     let selector = parse_selector("prettify-fragment")?;
-    let Some(wrapper) = parsed.select(selector.as_ref()).next() else {
+    let Some(root_wrapper) = parsed.select(selector.as_ref()).next() else {
         return Err(PyValueError::new_err(
             "Failed to parse HTML fragment for prettify",
         ));
     };
 
     let mut out = String::new();
-    for child in wrapper.children() {
+    for child in root_wrapper.children() {
         if let Some(child_element) = ElementRef::wrap(child) {
             serialize_pretty_element_into(&mut out, child_element, 0, 2);
             continue;
@@ -632,13 +663,13 @@ fn evaluate_xpath_sequence_elements(
                 PyValueError::new_err("XPath expression must return element nodes for conversion")
             })?;
             let tag = xot.local_name_str(element.name()).to_string();
-            let element_html = xot.to_string(node).map_err(|e| {
+            let outer_html = xot.to_string(node).map_err(|e| {
                 PyValueError::new_err(format!("Failed to serialize XPath element result: {e}"))
             })?;
 
             Ok(Element {
                 tag,
-                element_html,
+                outer_html,
                 inner_html: OnceLock::new(),
                 text: OnceLock::new(),
                 attrs: OnceLock::new(),
@@ -667,13 +698,13 @@ fn evaluate_xpath_sequence_first_element(
         PyValueError::new_err("XPath expression must return element nodes for conversion")
     })?;
     let tag = xot.local_name_str(element.name()).to_string();
-    let element_html = xot.to_string(node).map_err(|e| {
+    let outer_html = xot.to_string(node).map_err(|e| {
         PyValueError::new_err(format!("Failed to serialize XPath element result: {e}"))
     })?;
 
     Ok(Some(Element {
         tag,
-        element_html,
+        outer_html,
         inner_html: OnceLock::new(),
         text: OnceLock::new(),
         attrs: OnceLock::new(),
@@ -733,13 +764,13 @@ fn evaluate_fragment_xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
     let root = documents.document_node(document_handle).ok_or_else(|| {
         PyValueError::new_err("Failed to parse HTML fragment for XPath evaluation")
     })?;
-    let wrapper = documents.xot().document_element(root).map_err(|e| {
+    let root_element = documents.xot().document_element(root).map_err(|e| {
         PyValueError::new_err(format!(
             "Failed to parse HTML fragment for XPath evaluation: {e}"
         ))
     })?;
 
-    evaluate_xpath_elements(&mut documents, wrapper, expr)
+    evaluate_xpath_elements(&mut documents, root_element, expr)
 }
 
 fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<Option<Element>> {
@@ -751,13 +782,13 @@ fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<Option<Elem
     let root = documents.document_node(document_handle).ok_or_else(|| {
         PyValueError::new_err("Failed to parse HTML fragment for XPath evaluation")
     })?;
-    let wrapper = documents.xot().document_element(root).map_err(|e| {
+    let root_element = documents.xot().document_element(root).map_err(|e| {
         PyValueError::new_err(format!(
             "Failed to parse HTML fragment for XPath evaluation: {e}"
         ))
     })?;
 
-    evaluate_xpath_first_element(&mut documents, wrapper, expr)
+    evaluate_xpath_first_element(&mut documents, root_element, expr)
 }
 
 struct XPathDocumentState {
@@ -803,7 +834,7 @@ impl Document {
         })
     }
 
-    /// Get or initialize the XPath state lazily.
+    /// Get or initialize the `XPath` state lazily.
     ///
     /// Panics if the mutex is poisoned (only happens if a panic occurred
     /// while holding the lock, which should not happen in normal operation).
@@ -845,6 +876,10 @@ impl Document {
     /// Create a Document from a raw HTML string.
     ///
     ///     doc = Document("<html>...</html>")
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTML exceeds `max_size_bytes` and truncation is disabled.
     #[new]
     #[pyo3(signature = (html, *, max_size_bytes=None, truncate_on_limit=false))]
     pub fn new(
@@ -855,7 +890,11 @@ impl Document {
         Self::parse_with_limit(html, max_size_bytes, truncate_on_limit)
     }
 
-    /// Alternate constructor: Document.from_html(html: str) -> Document
+    /// Alternate constructor: `Document.from_html(html: str) -> Document`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTML exceeds `max_size_bytes` and truncation is disabled.
     #[staticmethod]
     #[pyo3(signature = (html, *, max_size_bytes=None, truncate_on_limit=false))]
     pub fn from_html(
@@ -879,8 +918,12 @@ impl Document {
     }
 
     /// Return the current document HTML formatted with indentation.
+    ///
+    /// # Errors
+    ///
+    /// This currently does not return errors, but the `PyResult` is preserved for API consistency.
     pub fn prettify(&self) -> PyResult<String> {
-        prettify_document_html(&self.raw_html)
+        Ok(prettify_document_html(&self.raw_html))
     }
 
     /// Select all elements matching the given CSS selector.
@@ -890,6 +933,10 @@ impl Document {
     ///     links = doc.select("a[href]")
     ///     for el in links:
     ///         print(el.text, el.attr("href"))
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `css` is not a valid CSS selector.
     pub fn select(&self, css: &str) -> PyResult<Vec<Element>> {
         let selector = parse_selector(css)?;
         Ok(self
@@ -902,6 +949,10 @@ impl Document {
     /// Return the first matching element, or None if nothing matches.
     ///
     ///     first_link = doc.select_first("a[href]")
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `css` is not a valid CSS selector.
     pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
         let selector = parse_selector(css)?;
         Ok(self
@@ -916,6 +967,10 @@ impl Document {
     ///     first_link = doc.find("a[href]")
     ///     if first_link:
     ///         print(first_link.text)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `css` is not a valid CSS selector.
     pub fn find(&self, css: &str) -> PyResult<Option<Element>> {
         self.select_first(css)
     }
@@ -923,27 +978,39 @@ impl Document {
     /// Shorthand for `select(css)`; more “requests-html” style.
     ///
     ///     doc.css("div.item")
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `css` is not a valid CSS selector.
     pub fn css(&self, css: &str) -> PyResult<Vec<Element>> {
         self.select(css)
     }
 
-    /// Evaluate an XPath expression against the whole document.
+    /// Evaluate an `XPath` expression against the whole document.
     ///
     /// The expression must return element nodes; attribute/text results are not supported.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression is invalid or does not evaluate to element nodes.
     pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
         let mut state_lock = self.ensure_xpath_state()?;
-        let state = state_lock
-            .as_mut()
-            .expect("XPath state should be initialized");
+        let state = state_lock.as_mut().ok_or_else(|| {
+            PyValueError::new_err("XPath state should be initialized")
+        })?;
         evaluate_xpath_elements(&mut state.documents, state.document_handle, expr)
     }
 
-    /// Return the first matching element for an XPath expression, or None.
+    /// Return the first matching element for an `XPath` expression, or None.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression is invalid or does not evaluate to element nodes.
     pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
         let mut state_lock = self.ensure_xpath_state()?;
-        let state = state_lock
-            .as_mut()
-            .expect("XPath state should be initialized");
+        let state = state_lock.as_mut().ok_or_else(|| {
+            PyValueError::new_err("XPath state should be initialized")
+        })?;
         evaluate_xpath_first_element(&mut state.documents, state.document_handle, expr)
     }
 
@@ -967,14 +1034,13 @@ impl Document {
         _exc_type: Option<Bound<'_, PyAny>>,
         _exc_value: Option<Bound<'_, PyAny>>,
         _traceback: Option<Bound<'_, PyAny>>,
-    ) -> PyResult<()> {
+    ) {
         self_.close();
-        Ok(())
     }
 
     fn __repr__(&self) -> String {
         let len = self.raw_html.len();
-        format!("<Document len_html={}>", len)
+        format!("<Document len_html={len}>")
     }
 }
 
@@ -1001,7 +1067,7 @@ fn prettify(
     py.detach(|| {
         let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
         let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-        prettify_document_html(html_to_parse.as_ref())
+        Ok(prettify_document_html(html_to_parse.as_ref()))
     })
 }
 
