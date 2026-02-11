@@ -1822,7 +1822,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "scraper"
 version = "0.25.0"
-source = "git+https://github.com/rust-scraper/scraper#f3132d9e06e652e2a4b3031bf7fc3ec3c6a817ce"
+source = "git+https://github.com/rust-scraper/scraper?rev=f3132d9e06e652e2a4b3031bf7fc3ec3c6a817ce#f3132d9e06e652e2a4b3031bf7fc3ec3c6a817ce"
 dependencies = [
  "cssparser",
  "ego-tree",
@@ -1835,7 +1835,7 @@ dependencies = [
 
 [[package]]
 name = "scraper-rs"
-version = "0.2.32"
+version = "0.3.0"
 dependencies = [
  "pyo3",
  "pyo3-async-runtimes",
