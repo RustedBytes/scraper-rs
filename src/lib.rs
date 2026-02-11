@@ -9,7 +9,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
 use scraper::{Html, Selector, element_ref::ElementRef};
-use sxd_xpath::{Context, Factory, Value, XPath, nodeset::Node as XPathNode};
+use xee_xpath::context::StaticContextBuilder;
+use xee_xpath::query::SequenceQuery;
+use xee_xpath::{DocumentHandle, Documents, Itemable, Queries, Query as XeeQuery};
 
 const DEFAULT_MAX_PARSE_BYTES: usize = 1_073_741_824; // 1 GiB
 const SELECTOR_CACHE_CAPACITY: usize = 256;
@@ -57,7 +59,7 @@ impl<T> FixedCache<T> {
 thread_local! {
     static SELECTOR_CACHE: RefCell<FixedCache<Arc<Selector>>> =
         RefCell::new(FixedCache::new(SELECTOR_CACHE_CAPACITY));
-    static XPATH_CACHE: RefCell<FixedCache<Rc<XPath>>> =
+    static XPATH_CACHE: RefCell<FixedCache<Rc<SequenceQuery>>> =
         RefCell::new(FixedCache::new(XPATH_CACHE_CAPACITY));
 }
 
@@ -389,38 +391,50 @@ fn is_void_html_element(name: &str) -> bool {
     )
 }
 
-fn serialize_pretty_node_into(
+enum PrettyChild<'a> {
+    Element(ElementRef<'a>),
+    Text(String),
+}
+
+fn collect_pretty_children(element: ElementRef<'_>) -> Vec<PrettyChild<'_>> {
+    let mut children = Vec::new();
+    for child in element.children() {
+        if let Some(child_element) = ElementRef::wrap(child) {
+            children.push(PrettyChild::Element(child_element));
+            continue;
+        }
+
+        if let Some(text) = child.value().as_text() {
+            let normalized = normalized_text(text);
+            if !normalized.is_empty() {
+                children.push(PrettyChild::Text(normalized));
+            }
+        }
+    }
+    children
+}
+
+fn serialize_pretty_element_into(
     out: &mut String,
-    node: XPathNode<'_>,
+    element: ElementRef<'_>,
     level: usize,
     indent_size: usize,
 ) {
-    let Some(element) = node.element() else {
-        return;
-    };
-
-    let name = element.name().local_part();
+    let name = element.value().name();
     push_indent(out, level, indent_size);
     out.push('<');
     out.push_str(name);
 
-    for attr in element.attributes().iter() {
+    for (attr_name, attr_value) in element.value().attrs() {
         out.push(' ');
-        out.push_str(attr.name().local_part());
+        out.push_str(attr_name);
         out.push('=');
         out.push('"');
-        out.push_str(&escape_html(attr.value()));
+        out.push_str(&escape_html(attr_value));
         out.push('"');
     }
 
-    let children = node
-        .children()
-        .into_iter()
-        .filter(|child| {
-            child.element().is_some() || child.text().is_some_and(|t| has_visible_text(t.text()))
-        })
-        .collect::<Vec<_>>();
-
+    let children = collect_pretty_children(element);
     if children.is_empty() {
         if is_void_html_element(name) {
             out.push('>');
@@ -433,14 +447,15 @@ fn serialize_pretty_node_into(
         return;
     }
 
-    let has_element_children = children.iter().any(|child| child.element().is_some());
+    let has_element_children = children
+        .iter()
+        .any(|child| matches!(child, PrettyChild::Element(_)));
     if !has_element_children
         && children.len() == 1
-        && let Some(text) = children[0].text()
+        && let PrettyChild::Text(text) = &children[0]
     {
-        let normalized = normalized_text(text.text());
         out.push('>');
-        out.push_str(&escape_html(&normalized));
+        out.push_str(&escape_html(text));
         out.push_str("</");
         out.push_str(name);
         out.push_str(">\n");
@@ -450,19 +465,15 @@ fn serialize_pretty_node_into(
     out.push_str(">\n");
 
     for child in children {
-        if child.element().is_some() {
-            serialize_pretty_node_into(out, child, level + 1, indent_size);
-            continue;
-        }
-
-        if let Some(text) = child.text() {
-            let normalized = normalized_text(text.text());
-            if normalized.is_empty() {
-                continue;
+        match child {
+            PrettyChild::Element(child_element) => {
+                serialize_pretty_element_into(out, child_element, level + 1, indent_size);
             }
-            push_indent(out, level + 1, indent_size);
-            out.push_str(&escape_html(&normalized));
-            out.push('\n');
+            PrettyChild::Text(text) => {
+                push_indent(out, level + 1, indent_size);
+                out.push_str(&escape_html(&text));
+                out.push('\n');
+            }
         }
     }
 
@@ -477,16 +488,11 @@ fn prettify_document_html(html: &str) -> PyResult<String> {
         return Ok(String::new());
     }
 
-    let package = sxd_html::parse_html(html);
-    let document = package.as_document();
-    let Some(root) = find_first_element_by_name(document.root().into(), "html") else {
-        return Err(PyValueError::new_err(
-            "Failed to parse HTML document for prettify",
-        ));
-    };
+    let parsed = Html::parse_document(html);
+    let root = parsed.root_element();
 
     let mut out = String::new();
-    serialize_pretty_node_into(&mut out, root, 0, 2);
+    serialize_pretty_element_into(&mut out, root, 0, 2);
     if out.ends_with('\n') {
         out.pop();
     }
@@ -504,10 +510,9 @@ fn prettify_fragment_html(html: &str) -> PyResult<String> {
     wrapped.push_str(html);
     wrapped.push_str("</prettify-fragment>");
 
-    let package = sxd_html::parse_html(&wrapped);
-    let document = package.as_document();
-    let Some(wrapper) = find_first_element_by_name(document.root().into(), "prettify-fragment")
-    else {
+    let parsed = Html::parse_document(&wrapped);
+    let selector = parse_selector("prettify-fragment")?;
+    let Some(wrapper) = parsed.select(selector.as_ref()).next() else {
         return Err(PyValueError::new_err(
             "Failed to parse HTML fragment for prettify",
         ));
@@ -515,13 +520,13 @@ fn prettify_fragment_html(html: &str) -> PyResult<String> {
 
     let mut out = String::new();
     for child in wrapper.children() {
-        if child.element().is_some() {
-            serialize_pretty_node_into(&mut out, child, 0, 2);
+        if let Some(child_element) = ElementRef::wrap(child) {
+            serialize_pretty_element_into(&mut out, child_element, 0, 2);
             continue;
         }
 
-        if let Some(text) = child.text() {
-            let normalized = normalized_text(text.text());
+        if let Some(text) = child.value().as_text() {
+            let normalized = normalized_text(text);
             if normalized.is_empty() {
                 continue;
             }
@@ -534,54 +539,6 @@ fn prettify_fragment_html(html: &str) -> PyResult<String> {
         out.pop();
     }
     Ok(out)
-}
-
-fn serialize_node_into(buf: &mut String, node: XPathNode<'_>) {
-    if let Some(element) = node.element() {
-        let name = element.name().local_part();
-        buf.push('<');
-        buf.push_str(name);
-
-        for attr in element.attributes().iter() {
-            buf.push(' ');
-            buf.push_str(attr.name().local_part());
-            buf.push('=');
-            buf.push('"');
-            buf.push_str(&escape_html(attr.value()));
-            buf.push('"');
-        }
-
-        buf.push('>');
-        for child in element.children() {
-            serialize_node_into(buf, child.into());
-        }
-        buf.push_str("</");
-        buf.push_str(name);
-        buf.push('>');
-    } else if let Some(text) = node.text() {
-        buf.push_str(&escape_html(text.text()));
-    }
-}
-
-fn snapshot_xpath_element(node: XPathNode<'_>) -> PyResult<Element> {
-    let element = node.element().ok_or_else(|| {
-        PyValueError::new_err("XPath expression must return element nodes for conversion")
-    })?;
-
-    let tag = element.name().local_part().to_string();
-    let element_html = {
-        let mut buf = String::new();
-        serialize_node_into(&mut buf, node);
-        buf
-    };
-
-    Ok(Element {
-        tag,
-        element_html,
-        inner_html: OnceLock::new(),
-        text: OnceLock::new(),
-        attrs: OnceLock::new(),
-    })
 }
 
 fn select_with_limit(
@@ -618,6 +575,129 @@ fn select_first_with_limit(
         .map(snapshot_element))
 }
 
+fn parse_xpath_documents(html: &str, parse_target: &str) -> PyResult<(Documents, DocumentHandle)> {
+    let mut documents = Documents::new();
+    let document_handle = documents.add_string_without_uri(html).map_err(|e| {
+        PyValueError::new_err(format!(
+            "Failed to parse {parse_target} for XPath evaluation: {e}"
+        ))
+    })?;
+    Ok((documents, document_handle))
+}
+
+fn compile_xpath(expr: &str) -> PyResult<Rc<SequenceQuery>> {
+    XPATH_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(query) = cache.get(expr) {
+            return Ok(query.clone());
+        }
+
+        let queries = Queries::new(StaticContextBuilder::default());
+        let query = queries
+            .sequence(expr)
+            .map_err(|e| PyValueError::new_err(format!("Invalid XPath {expr:?}: {e:?}")))?;
+        let query = Rc::new(query);
+        cache.insert(expr.to_string(), query.clone());
+        Ok(query)
+    })
+}
+
+fn execute_xpath_sequence(
+    documents: &mut Documents,
+    context_item: impl Itemable,
+    expr: &str,
+) -> PyResult<xee_xpath::Sequence> {
+    let query = compile_xpath(expr)?;
+    query
+        .execute(documents, context_item)
+        .map_err(|e| PyValueError::new_err(format!("Failed to evaluate XPath {expr:?}: {e:?}")))
+}
+
+fn evaluate_xpath_sequence_elements(
+    sequence: &xee_xpath::Sequence,
+    documents: &Documents,
+    expr: &str,
+) -> PyResult<Vec<Element>> {
+    let xot = documents.xot();
+    let element_nodes = sequence.elements(xot).map_err(|e| {
+        PyValueError::new_err(format!("XPath {expr:?} must return element nodes: {e:?}"))
+    })?;
+
+    element_nodes
+        .map(|node| {
+            let node = node.map_err(|e| {
+                PyValueError::new_err(format!("XPath {expr:?} must return element nodes: {e:?}"))
+            })?;
+            let element = xot.element(node).ok_or_else(|| {
+                PyValueError::new_err("XPath expression must return element nodes for conversion")
+            })?;
+            let tag = xot.local_name_str(element.name()).to_string();
+            let element_html = xot.to_string(node).map_err(|e| {
+                PyValueError::new_err(format!("Failed to serialize XPath element result: {e}"))
+            })?;
+
+            Ok(Element {
+                tag,
+                element_html,
+                inner_html: OnceLock::new(),
+                text: OnceLock::new(),
+                attrs: OnceLock::new(),
+            })
+        })
+        .collect()
+}
+
+fn evaluate_xpath_sequence_first_element(
+    sequence: &xee_xpath::Sequence,
+    documents: &Documents,
+    expr: &str,
+) -> PyResult<Option<Element>> {
+    let xot = documents.xot();
+    let mut element_nodes = sequence.elements(xot).map_err(|e| {
+        PyValueError::new_err(format!("XPath {expr:?} must return element nodes: {e:?}"))
+    })?;
+
+    let Some(node) = element_nodes.next() else {
+        return Ok(None);
+    };
+    let node = node.map_err(|e| {
+        PyValueError::new_err(format!("XPath {expr:?} must return element nodes: {e:?}"))
+    })?;
+    let element = xot.element(node).ok_or_else(|| {
+        PyValueError::new_err("XPath expression must return element nodes for conversion")
+    })?;
+    let tag = xot.local_name_str(element.name()).to_string();
+    let element_html = xot.to_string(node).map_err(|e| {
+        PyValueError::new_err(format!("Failed to serialize XPath element result: {e}"))
+    })?;
+
+    Ok(Some(Element {
+        tag,
+        element_html,
+        inner_html: OnceLock::new(),
+        text: OnceLock::new(),
+        attrs: OnceLock::new(),
+    }))
+}
+
+fn evaluate_xpath_elements(
+    documents: &mut Documents,
+    context_item: impl Itemable,
+    expr: &str,
+) -> PyResult<Vec<Element>> {
+    let sequence = execute_xpath_sequence(documents, context_item, expr)?;
+    evaluate_xpath_sequence_elements(&sequence, documents, expr)
+}
+
+fn evaluate_xpath_first_element(
+    documents: &mut Documents,
+    context_item: impl Itemable,
+    expr: &str,
+) -> PyResult<Option<Element>> {
+    let sequence = execute_xpath_sequence(documents, context_item, expr)?;
+    evaluate_xpath_sequence_first_element(&sequence, documents, expr)
+}
+
 fn xpath_with_limit(
     html: &str,
     expr: &str,
@@ -626,9 +706,9 @@ fn xpath_with_limit(
 ) -> PyResult<Vec<Element>> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-    let package = sxd_html::parse_html(html_to_parse.as_ref());
-    let document = package.as_document();
-    evaluate_xpath_elements(document.root().into(), expr)
+    let (mut documents, document_handle) =
+        parse_xpath_documents(html_to_parse.as_ref(), "HTML document")?;
+    evaluate_xpath_elements(&mut documents, document_handle, expr)
 }
 
 fn xpath_first_with_limit(
@@ -639,85 +719,9 @@ fn xpath_first_with_limit(
 ) -> PyResult<Option<Element>> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-    let package = sxd_html::parse_html(html_to_parse.as_ref());
-    let document = package.as_document();
-    evaluate_xpath_first_element(document.root().into(), expr)
-}
-
-fn compile_xpath(expr: &str) -> PyResult<Rc<XPath>> {
-    XPATH_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(xpath) = cache.get(expr) {
-            return Ok(xpath.clone());
-        }
-
-        let factory = Factory::new();
-        let expression = factory
-            .build(expr)
-            .map_err(|e| PyValueError::new_err(format!("Invalid XPath {expr:?}: {e:?}")))?
-            .ok_or_else(|| PyValueError::new_err("Provided XPath expression is empty"))?;
-        let expression = Rc::new(expression);
-        cache.insert(expr.to_string(), expression.clone());
-        Ok(expression)
-    })
-}
-
-fn evaluate_xpath_nodes<'d>(node: XPathNode<'d>, expr: &str) -> PyResult<Vec<XPathNode<'d>>> {
-    let expression = compile_xpath(expr)?;
-    let context = Context::new();
-    let result = expression
-        .evaluate(&context, node)
-        .map_err(|e| PyValueError::new_err(format!("Failed to evaluate XPath {expr:?}: {e:?}")))?;
-
-    match result {
-        Value::Nodeset(nodeset) => Ok(nodeset.document_order().into_iter().collect()),
-        other => Err(PyValueError::new_err(format!(
-            "XPath {expr:?} must return a node set (got {other:?})"
-        ))),
-    }
-}
-
-fn evaluate_xpath_elements<'d>(node: XPathNode<'d>, expr: &str) -> PyResult<Vec<Element>> {
-    evaluate_xpath_nodes(node, expr)?
-        .into_iter()
-        .map(snapshot_xpath_element)
-        .collect()
-}
-
-fn evaluate_xpath_first_element<'d>(node: XPathNode<'d>, expr: &str) -> PyResult<Option<Element>> {
-    let expression = compile_xpath(expr)?;
-    let context = Context::new();
-    let result = expression
-        .evaluate(&context, node)
-        .map_err(|e| PyValueError::new_err(format!("Failed to evaluate XPath {expr:?}: {e:?}")))?;
-
-    match result {
-        Value::Nodeset(nodeset) => nodeset
-            .document_order()
-            .into_iter()
-            .next()
-            .map(snapshot_xpath_element)
-            .transpose(),
-        other => Err(PyValueError::new_err(format!(
-            "XPath {expr:?} must return a node set (got {other:?})"
-        ))),
-    }
-}
-
-fn find_first_element_by_name<'d>(node: XPathNode<'d>, name: &str) -> Option<XPathNode<'d>> {
-    if let Some(element) = node.element()
-        && element.name().local_part() == name
-    {
-        return Some(node);
-    }
-
-    for child in node.children() {
-        if let Some(found) = find_first_element_by_name(child, name) {
-            return Some(found);
-        }
-    }
-
-    None
+    let (mut documents, document_handle) =
+        parse_xpath_documents(html_to_parse.as_ref(), "HTML document")?;
+    evaluate_xpath_first_element(&mut documents, document_handle, expr)
 }
 
 fn evaluate_fragment_xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
@@ -725,16 +729,17 @@ fn evaluate_fragment_xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
     wrapped.push_str("<xpath-fragment>");
     wrapped.push_str(html);
     wrapped.push_str("</xpath-fragment>");
-    let package = sxd_html::parse_html(&wrapped);
-    let document = package.as_document();
+    let (mut documents, document_handle) = parse_xpath_documents(&wrapped, "HTML fragment")?;
+    let root = documents.document_node(document_handle).ok_or_else(|| {
+        PyValueError::new_err("Failed to parse HTML fragment for XPath evaluation")
+    })?;
+    let wrapper = documents.xot().document_element(root).map_err(|e| {
+        PyValueError::new_err(format!(
+            "Failed to parse HTML fragment for XPath evaluation: {e}"
+        ))
+    })?;
 
-    let Some(wrapper) = find_first_element_by_name(document.root().into(), "xpath-fragment") else {
-        return Err(PyValueError::new_err(
-            "Failed to parse HTML fragment for XPath evaluation",
-        ));
-    };
-
-    evaluate_xpath_elements(wrapper, expr)
+    evaluate_xpath_elements(&mut documents, wrapper, expr)
 }
 
 fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<Option<Element>> {
@@ -742,16 +747,22 @@ fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<Option<Elem
     wrapped.push_str("<xpath-fragment>");
     wrapped.push_str(html);
     wrapped.push_str("</xpath-fragment>");
-    let package = sxd_html::parse_html(&wrapped);
-    let document = package.as_document();
+    let (mut documents, document_handle) = parse_xpath_documents(&wrapped, "HTML fragment")?;
+    let root = documents.document_node(document_handle).ok_or_else(|| {
+        PyValueError::new_err("Failed to parse HTML fragment for XPath evaluation")
+    })?;
+    let wrapper = documents.xot().document_element(root).map_err(|e| {
+        PyValueError::new_err(format!(
+            "Failed to parse HTML fragment for XPath evaluation: {e}"
+        ))
+    })?;
 
-    let Some(wrapper) = find_first_element_by_name(document.root().into(), "xpath-fragment") else {
-        return Err(PyValueError::new_err(
-            "Failed to parse HTML fragment for XPath evaluation",
-        ));
-    };
+    evaluate_xpath_first_element(&mut documents, wrapper, expr)
+}
 
-    evaluate_xpath_first_element(wrapper, expr)
+struct XPathDocumentState {
+    documents: Documents,
+    document_handle: DocumentHandle,
 }
 
 /// A parsed HTML document with convenient, Pythonic selectors.
@@ -767,7 +778,7 @@ fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<Option<Elem
 pub struct Document {
     raw_html: String,
     html: Html,
-    xpath_package: Mutex<Option<sxd_document::Package>>,
+    xpath_state: Mutex<Option<XPathDocumentState>>,
     closed: bool,
 }
 
@@ -787,29 +798,31 @@ impl Document {
         Ok(Self {
             raw_html: html_to_parse.into_owned(),
             html: html_parsed,
-            xpath_package: Mutex::new(None),
+            xpath_state: Mutex::new(None),
             closed: false,
         })
     }
 
-    /// Get or initialize the XPath package lazily.
+    /// Get or initialize the XPath state lazily.
     ///
     /// Panics if the mutex is poisoned (only happens if a panic occurred
     /// while holding the lock, which should not happen in normal operation).
-    fn ensure_xpath_package(&self) -> std::sync::MutexGuard<'_, Option<sxd_document::Package>> {
-        let mut package_lock = self
-            .xpath_package
-            .lock()
-            .expect("XPath package mutex poisoned");
+    fn ensure_xpath_state(
+        &self,
+    ) -> PyResult<std::sync::MutexGuard<'_, Option<XPathDocumentState>>> {
+        let mut state_lock = self.xpath_state.lock().expect("XPath state mutex poisoned");
 
         // Check if already initialized
-        if package_lock.is_none() {
-            // Parse HTML for XPath support
-            let package = sxd_html::parse_html(&self.raw_html);
-            *package_lock = Some(package);
+        if state_lock.is_none() {
+            let (documents, document_handle) =
+                parse_xpath_documents(&self.raw_html, "HTML document")?;
+            *state_lock = Some(XPathDocumentState {
+                documents,
+                document_handle,
+            });
         }
 
-        package_lock
+        Ok(state_lock)
     }
 
     /// Drop all DOM allocations and shrink owned strings.
@@ -822,10 +835,7 @@ impl Document {
         self.raw_html.shrink_to_fit();
         self.html = Html::parse_document("");
         // Mutex should never be poisoned here, but use expect for better error message
-        *self
-            .xpath_package
-            .lock()
-            .expect("XPath package mutex poisoned") = None;
+        *self.xpath_state.lock().expect("XPath state mutex poisoned") = None;
         self.closed = true;
     }
 }
@@ -921,23 +931,20 @@ impl Document {
     ///
     /// The expression must return element nodes; attribute/text results are not supported.
     pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
-        let package_lock = self.ensure_xpath_package();
-        // Safe to unwrap: ensure_xpath_package guarantees Some after returning
-        let package = package_lock
-            .as_ref()
-            .expect("XPath package should be initialized");
-        let document = package.as_document();
-        evaluate_xpath_elements(document.root().into(), expr)
+        let mut state_lock = self.ensure_xpath_state()?;
+        let state = state_lock
+            .as_mut()
+            .expect("XPath state should be initialized");
+        evaluate_xpath_elements(&mut state.documents, state.document_handle, expr)
     }
 
     /// Return the first matching element for an XPath expression, or None.
     pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
-        let package_lock = self.ensure_xpath_package();
-        let package = package_lock
-            .as_ref()
-            .expect("XPath package should be initialized");
-        let document = package.as_document();
-        evaluate_xpath_first_element(document.root().into(), expr)
+        let mut state_lock = self.ensure_xpath_state()?;
+        let state = state_lock
+            .as_mut()
+            .expect("XPath state should be initialized");
+        evaluate_xpath_first_element(&mut state.documents, state.document_handle, expr)
     }
 
     /// Explicitly release parsed DOMs to free memory early.

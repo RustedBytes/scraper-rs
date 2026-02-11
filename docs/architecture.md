@@ -14,9 +14,9 @@ Async support lives in pure Python in `scraper_rs/asyncio.py`. It wraps the Rust
 2. `Document::parse_with_limit` enforces size limits via `ensure_within_size_limit` in `src/lib.rs` (with optional truncation).
 3. Construction parses HTML once into `scraper::Html` for CSS selectors and stores the raw HTML string.
 4. CSS selection uses `parse_selector` and `Html::select`; parsed selectors are reused from a thread-local fixed-size cache (`SELECTOR_CACHE`).
-5. XPath parsing is lazy: the first `xpath(...)` / `xpath_first(...)` call runs `ensure_xpath_package`, which parses `raw_html` with `sxd_html::parse_html` and stores it in `xpath_package` for reuse.
-6. XPath expressions are compiled via `compile_xpath` and reused from a thread-local fixed-size cache (`XPATH_CACHE`).
-7. Selection results are converted into owned `Element` snapshots by `snapshot_element` / `snapshot_xpath_element`. `Element` computes `text`, inner `html`, and `attrs` lazily from stored element HTML on first access.
+5. XPath parsing is lazy: the first `xpath(...)` / `xpath_first(...)` call runs `ensure_xpath_state`, which parses `raw_html` into a `xee_xpath::Documents` store and keeps it for reuse.
+6. XPath expressions are compiled via `compile_xpath` (to `SequenceQuery`) and reused from a thread-local fixed-size cache (`XPATH_CACHE`).
+7. Selection results are converted into owned `Element` snapshots by `snapshot_element` (CSS path) and XPath sequence conversion helpers. `Element` computes `text`, inner `html`, and `attrs` lazily from stored element HTML on first access.
 
 Top-level helper path:
 
@@ -25,8 +25,8 @@ Top-level helper path:
 Key code references:
 - Parsing and size limits: `src/lib.rs` (`DEFAULT_MAX_PARSE_BYTES`, `ensure_within_size_limit`, `Document::parse_with_limit`)
 - CSS selection and selector cache: `src/lib.rs` (`SELECTOR_CACHE`, `parse_selector`, `snapshot_element`)
-- Lazy XPath setup and XPath cache: `src/lib.rs` (`ensure_xpath_package`, `XPATH_CACHE`, `compile_xpath`)
-- XPath selection and serialization: `src/lib.rs` (`evaluate_xpath_nodes`, `snapshot_xpath_element`, `serialize_node_into`)
+- Lazy XPath setup and XPath cache: `src/lib.rs` (`ensure_xpath_state`, `XPATH_CACHE`, `compile_xpath`)
+- XPath selection and conversion: `src/lib.rs` (`execute_xpath_sequence`, `evaluate_xpath_sequence_elements`)
 
 ## Data flow (async)
 

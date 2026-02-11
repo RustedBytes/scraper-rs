@@ -18,7 +18,7 @@ This file contains essential information for Large Language Models (LLMs) to eff
 ### Core Technologies
 - **Rust** (2024 edition)
   - `scraper` v0.25 - HTML parsing and CSS selection
-  - `sxd-document` v0.3.2, `sxd-xpath` v0.4.2, `sxd_html` v0.1.2 - XPath support
+  - `xee-xpath` v0.1.5 - XPath support
   - `pyo3` v0.27 with `extension-module` and `abi3-py310` features
   - `pyo3-async-runtimes` v0.27 with `tokio-runtime` feature
   - `tokio` v1 (rt, macros) for async wrappers
@@ -293,9 +293,7 @@ See `.github/workflows/release.yml` and `.github/workflows/bump-version.yml`
 - `pyo3-async-runtimes = { version = "0.27", features = ["tokio-runtime"] }`
 - `tokio = { version = "1", features = ["rt", "macros"] }`
 - `scraper = "0.25"`
-- `sxd-document = "0.3.2"`
-- `sxd-xpath = "0.4.2"`
-- `sxd_html = "0.1.2"`
+- `xee-xpath = "0.1.5"`
 
 ### Python Dependencies (pyproject.toml)
 **Runtime**: None (self-contained binary wheel)

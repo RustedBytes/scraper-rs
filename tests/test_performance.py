@@ -34,7 +34,7 @@ def large_html() -> str:
 
 def test_lazy_xpath_parsing(large_html: str) -> None:
     """Test that XPath parsing is lazy - not parsed until xpath() is called."""
-    # Parsing document should NOT parse with sxd_html yet
+    # Parsing document should NOT parse with the XPath engine yet
     start = time.perf_counter()
     doc = Document(large_html)
     parse_time = time.perf_counter() - start

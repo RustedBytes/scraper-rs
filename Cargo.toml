@@ -14,9 +14,7 @@ tokio = { version = "1", features = ["rt", "macros"] }
 
 scraper = { git = "https://github.com/rust-scraper/scraper", features = ["atomic"] }
 
-sxd-document = "0.3.2"
-sxd-xpath = "0.4.2"
-sxd_html = "0.1.2"
+xee-xpath = "0.1.5"
 
 [profile.release]
 lto = "fat"
