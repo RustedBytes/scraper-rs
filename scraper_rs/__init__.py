@@ -1,8 +1,14 @@
 """scraper_rs - Python bindings for the Rust scraper crate."""
 
-# Import everything from the Rust extension module
-from .scraper_rs import *
+from . import scraper_rs as _scraper_rs
 
-__doc__ = scraper_rs.__doc__
-if hasattr(scraper_rs, "__all__"):
-    __all__ = scraper_rs.__all__
+__doc__ = _scraper_rs.__doc__
+__all__ = list(
+    getattr(
+        _scraper_rs,
+        "__all__",
+        [name for name in dir(_scraper_rs) if not name.startswith("_")],
+    )
+)
+
+globals().update({name: getattr(_scraper_rs, name) for name in __all__})
