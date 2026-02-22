@@ -1559,11 +1559,17 @@ mod tests {
         assert!(end_css.is_empty());
 
         let start_xpath = xpath_with_limit(html, "//*[@id='start']", Some(limit), true);
-        assert!(start_xpath.is_ok(), "xpath should succeed for retained prefix");
+        assert!(
+            start_xpath.is_ok(),
+            "xpath should succeed for retained prefix"
+        );
         assert_eq!(start_xpath.unwrap_or_default().len(), 1);
 
         let end_xpath = xpath_with_limit(html, "//*[@id='end']", Some(limit), true);
-        assert!(end_xpath.is_ok(), "xpath should succeed for truncated suffix");
+        assert!(
+            end_xpath.is_ok(),
+            "xpath should succeed for truncated suffix"
+        );
         assert!(end_xpath.unwrap_or_default().is_empty());
     }
 
@@ -1652,5 +1658,168 @@ mod tests {
         );
         assert!(closed_xpath_first.unwrap_or(None).is_none());
         assert_eq!(doc.prettify().unwrap(), "");
+    }
+
+    #[test]
+    fn truncate_for_repr_adds_ellipsis_when_needed() {
+        assert_eq!(truncate_for_repr("abcdef", 3), "abc...");
+        assert_eq!(truncate_for_repr("abc", 3), "abc");
+    }
+
+    #[test]
+    fn element_methods_aliases_and_repr_work() {
+        init_python();
+        let html = r#"<div class="item" data-id="7"><a href="/x"> Link </a></div>"#;
+        let element = select_fragment(html, "div.item")
+            .unwrap()
+            .into_iter()
+            .next()
+            .expect("expected element");
+
+        assert_eq!(element.tag(), "div");
+        assert_eq!(element.text(), "Link");
+        assert!(element.html().contains(r#"<a href="/x"> Link </a>"#));
+
+        let attrs = element.attrs();
+        assert_eq!(attrs.get("class"), Some(&"item".to_string()));
+        assert_eq!(element.attr("data-id"), Some("7".to_string()));
+        assert_eq!(
+            element.get("missing", Some("fallback".to_string())),
+            Some("fallback".to_string())
+        );
+
+        assert_eq!(element.select("a").unwrap().len(), 1);
+        assert_eq!(element.css("a").unwrap().len(), 1);
+        assert!(element.find("a").unwrap().is_some());
+        assert_eq!(element.xpath(".//a").unwrap().len(), 1);
+        assert!(element.xpath_first(".//p").unwrap().is_none());
+
+        let pretty = element.prettify().unwrap();
+        assert!(pretty.contains("<a href=\"/x\">Link</a>"));
+
+        Python::attach(|py| {
+            let dict = element.to_dict(py).unwrap();
+            let dict = dict.bind(py);
+            assert_eq!(
+                dict.get_item("tag")
+                    .unwrap()
+                    .expect("missing tag")
+                    .extract::<String>()
+                    .unwrap(),
+                "div"
+            );
+            assert_eq!(
+                dict.get_item("text")
+                    .unwrap()
+                    .expect("missing text")
+                    .extract::<String>()
+                    .unwrap(),
+                "Link"
+            );
+        });
+
+        assert!(element.__repr__().contains("<Element tag='div'"));
+    }
+
+    #[test]
+    fn document_aliases_repr_and_context_manager_work() {
+        init_python();
+        let mut doc = Document::new(SAMPLE_HTML, None, false).unwrap();
+
+        assert_eq!(
+            doc.find("a").unwrap().and_then(|el| el.attr("href")),
+            Some("/a".to_string())
+        );
+        assert_eq!(doc.css("a").unwrap().len(), 2);
+        assert_eq!(
+            doc.__repr__(),
+            format!("<Document len_html={}>", SAMPLE_HTML.len())
+        );
+
+        Python::attach(|py| {
+            let doc_obj = Py::new(py, Document::new(SAMPLE_HTML, None, false).unwrap()).unwrap();
+            let bound = doc_obj.bind(py);
+
+            let entered = bound.call_method0("__enter__").unwrap();
+            assert!(entered.is(bound));
+
+            bound
+                .call_method1("__exit__", (py.None(), py.None(), py.None()))
+                .unwrap();
+
+            let closed = doc_obj.borrow(py);
+            assert_eq!(closed.html(), "");
+            assert!(closed.select("a").unwrap().is_empty());
+        });
+
+        doc.close();
+    }
+
+    #[test]
+    fn top_level_pyfunctions_match_document_behavior() {
+        init_python();
+        let parsed = parse(SAMPLE_HTML, None, false).unwrap();
+        assert_eq!(parsed.select("a").unwrap().len(), 2);
+
+        Python::attach(|py| {
+            let pretty = prettify(py, SAMPLE_HTML, None, false).unwrap();
+            assert!(pretty.contains("<html>"));
+            assert!(pretty.contains("<a href=\"/a\">First</a>"));
+
+            let selected = select(py, SAMPLE_HTML, "a", None, false).unwrap();
+            assert_eq!(selected.len(), 2);
+
+            let selected_first = select_first(py, SAMPLE_HTML, "a", None, false)
+                .unwrap()
+                .expect("expected first selected element");
+            assert_eq!(selected_first.attr("href"), Some("/a".to_string()));
+
+            let first_alias = first(py, SAMPLE_HTML, "a", None, false)
+                .unwrap()
+                .expect("expected first element");
+            assert_eq!(first_alias.text(), "First");
+
+            let xpath_all = xpath(py, SAMPLE_HTML, ".//a", None, false).unwrap();
+            assert_eq!(xpath_all.len(), 2);
+
+            let xpath_first_match = xpath_first(py, SAMPLE_HTML, ".//a", None, false)
+                .unwrap()
+                .expect("expected first xpath element");
+            assert_eq!(xpath_first_match.attr("href"), Some("/a".to_string()));
+        });
+    }
+
+    #[test]
+    fn pymodule_initializer_registers_public_api() {
+        init_python();
+        Python::attach(|py| {
+            let module = PyModule::new(py, "scraper_rs").unwrap();
+            scraper_rs(py, &module).unwrap();
+
+            assert!(module.getattr("Document").is_ok());
+            assert!(module.getattr("Element").is_ok());
+            assert!(module.getattr("__version__").is_ok());
+
+            for name in [
+                "parse",
+                "prettify",
+                "select",
+                "select_first",
+                "first",
+                "xpath",
+                "xpath_first",
+                "select_async",
+                "select_first_async",
+                "first_async",
+                "xpath_async",
+                "xpath_first_async",
+                "_select_fragment_async",
+                "_select_first_fragment_async",
+                "_xpath_fragment_async",
+                "_xpath_first_fragment_async",
+            ] {
+                assert!(module.getattr(name).is_ok(), "missing export {name}");
+            }
+        });
     }
 }
