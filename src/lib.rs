@@ -737,9 +737,26 @@ fn xpath_with_limit(
 ) -> PyResult<Vec<Element>> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-    let (mut documents, document_handle) =
-        parse_xpath_documents(html_to_parse.as_ref(), "HTML document")?;
-    evaluate_xpath_elements(&mut documents, document_handle, expr)
+    match parse_xpath_documents(html_to_parse.as_ref(), "HTML document") {
+        Ok((mut documents, document_handle)) => {
+            evaluate_xpath_elements(&mut documents, document_handle, expr)
+        }
+        Err(_) if truncate_on_limit => {
+            if let Ok(elements) = evaluate_fragment_xpath(html_to_parse.as_ref(), expr) {
+                return Ok(elements);
+            }
+            let fallback = html_to_parse
+                .rfind('>')
+                .map(|last_tag_end| &html_to_parse[..=last_tag_end])
+                .unwrap_or("");
+            if fallback.is_empty() {
+                Ok(Vec::new())
+            } else {
+                evaluate_fragment_xpath(fallback, expr).or(Ok(Vec::new()))
+            }
+        }
+        Err(err) => Err(err),
+    }
 }
 
 fn xpath_first_with_limit(
@@ -750,9 +767,26 @@ fn xpath_first_with_limit(
 ) -> PyResult<Option<Element>> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-    let (mut documents, document_handle) =
-        parse_xpath_documents(html_to_parse.as_ref(), "HTML document")?;
-    evaluate_xpath_first_element(&mut documents, document_handle, expr)
+    match parse_xpath_documents(html_to_parse.as_ref(), "HTML document") {
+        Ok((mut documents, document_handle)) => {
+            evaluate_xpath_first_element(&mut documents, document_handle, expr)
+        }
+        Err(_) if truncate_on_limit => {
+            if let Ok(element) = evaluate_fragment_xpath_first(html_to_parse.as_ref(), expr) {
+                return Ok(element);
+            }
+            let fallback = html_to_parse
+                .rfind('>')
+                .map(|last_tag_end| &html_to_parse[..=last_tag_end])
+                .unwrap_or("");
+            if fallback.is_empty() {
+                Ok(None)
+            } else {
+                evaluate_fragment_xpath_first(fallback, expr).or(Ok(None))
+            }
+        }
+        Err(err) => Err(err),
+    }
 }
 
 fn evaluate_fragment_xpath(html: &str, expr: &str) -> PyResult<Vec<Element>> {
@@ -994,10 +1028,13 @@ impl Document {
     ///
     /// Returns an error if the expression is invalid or does not evaluate to element nodes.
     pub fn xpath(&self, expr: &str) -> PyResult<Vec<Element>> {
+        if self.closed {
+            return Ok(Vec::new());
+        }
         let mut state_lock = self.ensure_xpath_state()?;
-        let state = state_lock.as_mut().ok_or_else(|| {
-            PyValueError::new_err("XPath state should be initialized")
-        })?;
+        let state = state_lock
+            .as_mut()
+            .ok_or_else(|| PyValueError::new_err("XPath state should be initialized"))?;
         evaluate_xpath_elements(&mut state.documents, state.document_handle, expr)
     }
 
@@ -1007,10 +1044,13 @@ impl Document {
     ///
     /// Returns an error if the expression is invalid or does not evaluate to element nodes.
     pub fn xpath_first(&self, expr: &str) -> PyResult<Option<Element>> {
+        if self.closed {
+            return Ok(None);
+        }
         let mut state_lock = self.ensure_xpath_state()?;
-        let state = state_lock.as_mut().ok_or_else(|| {
-            PyValueError::new_err("XPath state should be initialized")
-        })?;
+        let state = state_lock
+            .as_mut()
+            .ok_or_else(|| PyValueError::new_err("XPath state should be initialized"))?;
         evaluate_xpath_first_element(&mut state.documents, state.document_handle, expr)
     }
 
@@ -1335,4 +1375,194 @@ fn scraper_rs(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Once;
+
+    const SAMPLE_HTML: &str = r#"
+        <html>
+          <body>
+            <div class="item" data-id="1"><a href="/a">First</a></div>
+            <div class="item" data-id="2"><a href="/b">Second</a></div>
+          </body>
+        </html>
+    "#;
+
+    fn init_python() {
+        static INIT: Once = Once::new();
+        INIT.call_once(Python::initialize);
+    }
+
+    #[test]
+    fn fixed_cache_evicts_oldest_entry() {
+        let mut cache = FixedCache::new(2);
+        cache.insert("first".to_string(), 1_u8);
+        cache.insert("second".to_string(), 2_u8);
+        cache.insert("third".to_string(), 3_u8);
+
+        assert!(cache.get("first").is_none());
+        assert_eq!(cache.get("second"), Some(&2_u8));
+        assert_eq!(cache.get("third"), Some(&3_u8));
+    }
+
+    #[test]
+    fn ensure_within_size_limit_returns_borrowed_when_within_limit() {
+        let html = "<div>ok</div>";
+        let limited = ensure_within_size_limit(html, html.len(), false).unwrap();
+        assert!(matches!(limited, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn ensure_within_size_limit_truncates_on_utf8_boundary() {
+        let html = "<p>ab😀cd</p>";
+        let emoji_start = html.find('😀').unwrap();
+        let limit_inside_emoji = emoji_start + 1;
+
+        let truncated = ensure_within_size_limit(html, limit_inside_emoji, true)
+            .unwrap()
+            .into_owned();
+
+        assert!(truncated.len() < limit_inside_emoji);
+        assert!(truncated.is_char_boundary(truncated.len()));
+        assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn ensure_within_size_limit_errors_without_truncate() {
+        let html = "<div>too big</div>";
+        assert!(ensure_within_size_limit(html, 4, false).is_err());
+    }
+
+    #[test]
+    fn normalize_text_nodes_collapses_whitespace() {
+        let normalized = normalize_text_nodes([" one\t", "\n two  ", "three "]);
+        assert_eq!(normalized, "one two three");
+    }
+
+    #[test]
+    fn extractors_return_expected_element_parts() {
+        let element_html = r#"<div id="x" class="item"><span> Hello </span><b>World</b></div>"#;
+
+        assert_eq!(
+            inner_html_from_element_html(element_html),
+            "<span> Hello </span><b>World</b>"
+        );
+        assert_eq!(text_from_element_html(element_html), "Hello World");
+
+        let attrs = attrs_from_element_html(element_html);
+        assert_eq!(attrs.get("id"), Some(&"x".to_string()));
+        assert_eq!(attrs.get("class"), Some(&"item".to_string()));
+    }
+
+    #[test]
+    fn parse_selector_reuses_cached_instances() {
+        let first = parse_selector("div.item").unwrap();
+        let second = parse_selector("div.item").unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn compile_xpath_reuses_cached_instances() {
+        init_python();
+        let first = compile_xpath(".//div").unwrap();
+        let second = compile_xpath(".//div").unwrap();
+        assert!(Rc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn select_fragment_helpers_return_expected_matches() {
+        let html = r#"<section><a href="/a">A</a><a href="/b">B</a></section>"#;
+
+        let all = select_fragment(html, "a[href]").unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].text(), "A");
+        assert_eq!(all[1].attr("href"), Some("/b".to_string()));
+
+        let first = select_fragment_first(html, "a[href]").unwrap().unwrap();
+        assert_eq!(first.text(), "A");
+    }
+
+    #[test]
+    fn fragment_xpath_helpers_return_expected_matches() {
+        init_python();
+        let html = r#"<ul><li><a>A</a></li><li><a>B</a></li></ul>"#;
+
+        let all = evaluate_fragment_xpath(html, ".//li/a").unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].text(), "A");
+        assert_eq!(all[1].text(), "B");
+
+        let missing = evaluate_fragment_xpath_first(html, ".//p").unwrap();
+        assert!(missing.is_none());
+    }
+
+    #[test]
+    fn select_and_xpath_with_limit_respect_truncation() {
+        init_python();
+        let html = concat!(
+            r#"<div id="start">begin</div>"#,
+            r#"<div id="middle">this content is intentionally long for truncation</div>"#,
+            r#"<div id="end">finish</div>"#
+        );
+        let limit = html.find("id=\"end\"").unwrap();
+
+        let start_css = select_with_limit(html, "#start", Some(limit), true).unwrap();
+        let end_css = select_with_limit(html, "#end", Some(limit), true).unwrap();
+        assert_eq!(start_css.len(), 1);
+        assert!(end_css.is_empty());
+
+        let start_xpath = xpath_with_limit(html, "//*[@id='start']", Some(limit), true);
+        assert!(start_xpath.is_ok(), "xpath should succeed for retained prefix");
+        assert_eq!(start_xpath.unwrap_or_default().len(), 1);
+
+        let end_xpath = xpath_with_limit(html, "//*[@id='end']", Some(limit), true);
+        assert!(end_xpath.is_ok(), "xpath should succeed for truncated suffix");
+        assert!(end_xpath.unwrap_or_default().is_empty());
+    }
+
+    #[test]
+    fn prettify_helpers_format_document_and_fragment() {
+        let doc_pretty =
+            prettify_document_html(r#"<div id="x"><span>Hi</span><p>A &amp; B</p><br></div>"#);
+        assert!(doc_pretty.contains(r#"<div id="x">"#));
+        assert!(doc_pretty.contains("<span>Hi</span>"));
+        assert!(doc_pretty.contains("<p>A &amp; B</p>"));
+        assert!(doc_pretty.contains("<br>"));
+
+        let fragment_pretty =
+            prettify_fragment_html(r#"hello <span data-x="1"> world </span>"#).unwrap();
+        assert_eq!(fragment_pretty, "hello\n<span data-x=\"1\">world</span>");
+    }
+
+    #[test]
+    fn document_close_clears_state_and_is_idempotent() {
+        init_python();
+        let mut doc = Document::new(SAMPLE_HTML, None, false).unwrap();
+
+        assert_eq!(doc.select("a").unwrap().len(), 2);
+        let initial_xpath = doc.xpath(".//a");
+        assert!(initial_xpath.is_ok(), "xpath should succeed before close");
+        assert_eq!(initial_xpath.unwrap_or_default().len(), 2);
+
+        doc.close();
+        doc.close();
+
+        assert_eq!(doc.html(), "");
+        assert_eq!(doc.text(), "");
+        assert!(doc.select("a").unwrap().is_empty());
+        assert!(doc.select_first("a").unwrap().is_none());
+        let closed_xpath = doc.xpath(".//a");
+        assert!(closed_xpath.is_ok(), "xpath should succeed after close");
+        assert!(closed_xpath.unwrap_or_default().is_empty());
+        let closed_xpath_first = doc.xpath_first(".//a");
+        assert!(
+            closed_xpath_first.is_ok(),
+            "xpath_first should succeed after close"
+        );
+        assert!(closed_xpath_first.unwrap_or(None).is_none());
+        assert_eq!(doc.prettify().unwrap(), "");
+    }
 }

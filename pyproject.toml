@@ -37,6 +37,7 @@ dev = ["maturin", "pytest"]
 
 [tool.maturin]
 bindings = "pyo3"
+features = ["extension-module"]
 strip = true
 profile = "release"
 include = ["scraper_rs.pyi", "py.typed"]

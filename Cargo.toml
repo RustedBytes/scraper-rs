@@ -7,8 +7,12 @@ edition = "2024"
 name = "scraper_rs"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]
+
 [dependencies]
-pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
+pyo3 = { version = "0.28.2", features = ["abi3-py310"] }
 pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["rt", "macros"] }
 
