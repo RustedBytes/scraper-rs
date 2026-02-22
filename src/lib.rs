@@ -1409,6 +1409,17 @@ mod tests {
     }
 
     #[test]
+    fn fixed_cache_overwrites_existing_entry() {
+        let mut cache = FixedCache::new(2);
+        cache.insert("first".to_string(), 1_u8);
+        cache.insert("second".to_string(), 2_u8);
+        cache.insert("first".to_string(), 9_u8);
+
+        assert_eq!(cache.get("first"), Some(&9_u8));
+        assert_eq!(cache.get("second"), Some(&2_u8));
+    }
+
+    #[test]
     fn ensure_within_size_limit_returns_borrowed_when_within_limit() {
         let html = "<div>ok</div>";
         let limited = ensure_within_size_limit(html, html.len(), false).unwrap();
@@ -1465,11 +1476,26 @@ mod tests {
     }
 
     #[test]
+    fn parse_selector_reports_invalid_css() {
+        let err = parse_selector("div[").unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("Invalid CSS selector"));
+    }
+
+    #[test]
     fn compile_xpath_reuses_cached_instances() {
         init_python();
         let first = compile_xpath(".//div").unwrap();
         let second = compile_xpath(".//div").unwrap();
         assert!(Rc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn compile_xpath_reports_invalid_expression() {
+        init_python();
+        let err = compile_xpath("//*[").unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("Invalid XPath"));
     }
 
     #[test]
@@ -1500,6 +1526,24 @@ mod tests {
     }
 
     #[test]
+    fn fragment_xpath_helpers_error_on_non_element_results() {
+        init_python();
+        let html = r#"<div><a>First</a></div>"#;
+
+        let err_message = match evaluate_fragment_xpath(html, "string(.//a)") {
+            Ok(_) => panic!("expected xpath evaluation to fail for non-element result"),
+            Err(err) => err.to_string(),
+        };
+        assert!(err_message.contains("must return element nodes"));
+
+        let first_err_message = match evaluate_fragment_xpath_first(html, "string(.//a)") {
+            Ok(_) => panic!("expected xpath_first evaluation to fail for non-element result"),
+            Err(err) => err.to_string(),
+        };
+        assert!(first_err_message.contains("must return element nodes"));
+    }
+
+    #[test]
     fn select_and_xpath_with_limit_respect_truncation() {
         init_python();
         let html = concat!(
@@ -1524,6 +1568,25 @@ mod tests {
     }
 
     #[test]
+    fn xpath_first_with_limit_respects_truncation() {
+        init_python();
+        let html = concat!(
+            r#"<div id="start">begin</div>"#,
+            r#"<div id="middle">this content is intentionally long for truncation</div>"#,
+            r#"<div id="end">finish</div>"#
+        );
+        let limit = html.find("id=\"end\"").unwrap();
+
+        let start = xpath_first_with_limit(html, "//*[@id='start']", Some(limit), true)
+            .unwrap()
+            .expect("expected start element");
+        assert_eq!(start.attr("id"), Some("start".to_string()));
+
+        let end = xpath_first_with_limit(html, "//*[@id='end']", Some(limit), true).unwrap();
+        assert!(end.is_none());
+    }
+
+    #[test]
     fn prettify_helpers_format_document_and_fragment() {
         let doc_pretty =
             prettify_document_html(r#"<div id="x"><span>Hi</span><p>A &amp; B</p><br></div>"#);
@@ -1535,6 +1598,31 @@ mod tests {
         let fragment_pretty =
             prettify_fragment_html(r#"hello <span data-x="1"> world </span>"#).unwrap();
         assert_eq!(fragment_pretty, "hello\n<span data-x=\"1\">world</span>");
+    }
+
+    #[test]
+    fn prettify_document_html_returns_empty_for_whitespace() {
+        assert_eq!(prettify_document_html(" \n\t  "), "");
+    }
+
+    #[test]
+    fn escape_html_encodes_special_characters() {
+        let escaped = escape_html(r#"5 < 7 & 8 > 3 "quote" 'single'"#);
+        assert_eq!(
+            escaped,
+            "5 &lt; 7 &amp; 8 &gt; 3 &quot;quote&quot; &#39;single&#39;"
+        );
+    }
+
+    #[test]
+    fn document_from_html_constructor_matches_new() {
+        init_python();
+        let via_new = Document::new(SAMPLE_HTML, None, false).unwrap();
+        let via_from_html = Document::from_html(SAMPLE_HTML, None, false).unwrap();
+
+        assert_eq!(via_new.text(), via_from_html.text());
+        assert_eq!(via_new.select("a").unwrap().len(), 2);
+        assert_eq!(via_from_html.select("a").unwrap().len(), 2);
     }
 
     #[test]
