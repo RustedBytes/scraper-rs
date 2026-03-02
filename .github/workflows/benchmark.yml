@@ -47,7 +47,7 @@ jobs:
           python benchmarks/bench_sync_async.py
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: benchmark-results
