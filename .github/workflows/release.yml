@@ -42,7 +42,7 @@ jobs:
           args: --release --strip --out dist
 
       - name: Upload wheels as artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
           path: dist/*.whl
@@ -95,7 +95,7 @@ jobs:
           args: --release --strip --out dist
 
       - name: Upload free-threaded wheels as artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-free-threaded-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/*.whl
@@ -122,7 +122,7 @@ jobs:
           args: --out dist
 
       - name: Upload sdist as artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist/*.tar.gz
