@@ -742,18 +742,7 @@ fn xpath_with_limit(
             evaluate_xpath_elements(&mut documents, document_handle, expr)
         }
         Err(_) if truncate_on_limit => {
-            if let Ok(elements) = evaluate_fragment_xpath(html_to_parse.as_ref(), expr) {
-                return Ok(elements);
-            }
-            let fallback = html_to_parse
-                .rfind('>')
-                .map(|last_tag_end| &html_to_parse[..=last_tag_end])
-                .unwrap_or("");
-            if fallback.is_empty() {
-                Ok(Vec::new())
-            } else {
-                evaluate_fragment_xpath(fallback, expr).or(Ok(Vec::new()))
-            }
+            evaluate_fragment_xpath_with_fallback(html_to_parse.as_ref(), expr)
         }
         Err(err) => Err(err),
     }
@@ -772,18 +761,7 @@ fn xpath_first_with_limit(
             evaluate_xpath_first_element(&mut documents, document_handle, expr)
         }
         Err(_) if truncate_on_limit => {
-            if let Ok(element) = evaluate_fragment_xpath_first(html_to_parse.as_ref(), expr) {
-                return Ok(element);
-            }
-            let fallback = html_to_parse
-                .rfind('>')
-                .map(|last_tag_end| &html_to_parse[..=last_tag_end])
-                .unwrap_or("");
-            if fallback.is_empty() {
-                Ok(None)
-            } else {
-                evaluate_fragment_xpath_first(fallback, expr).or(Ok(None))
-            }
+            evaluate_fragment_xpath_first_with_fallback(html_to_parse.as_ref(), expr)
         }
         Err(err) => Err(err),
     }
@@ -823,6 +801,39 @@ fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<Option<Elem
     })?;
 
     evaluate_xpath_first_element(&mut documents, root_element, expr)
+}
+
+fn normalize_xpath_document_html(html: &str) -> String {
+    Html::parse_document(html).root_element().html()
+}
+
+fn evaluate_fragment_xpath_with_fallback(html: &str, expr: &str) -> PyResult<Vec<Element>> {
+    let normalized = normalize_xpath_document_html(html);
+    if normalized.is_empty() {
+        return Ok(Vec::new());
+    }
+    match parse_xpath_documents(&normalized, "HTML document") {
+        Ok((mut documents, document_handle)) => {
+            evaluate_xpath_elements(&mut documents, document_handle, expr)
+        }
+        Err(_) => Ok(Vec::new()),
+    }
+}
+
+fn evaluate_fragment_xpath_first_with_fallback(
+    html: &str,
+    expr: &str,
+) -> PyResult<Option<Element>> {
+    let normalized = normalize_xpath_document_html(html);
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+    match parse_xpath_documents(&normalized, "HTML document") {
+        Ok((mut documents, document_handle)) => {
+            evaluate_xpath_first_element(&mut documents, document_handle, expr)
+        }
+        Err(_) => Ok(None),
+    }
 }
 
 struct XPathDocumentState {
@@ -1185,9 +1196,7 @@ fn select_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
-            Python::attach(|py| {
-                py.detach(|| select_with_limit(&html, &css, max_size_bytes, truncate_on_limit))
-            })
+            select_with_limit(&html, &css, max_size_bytes, truncate_on_limit)
         })
         .await
         .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
@@ -1206,11 +1215,7 @@ fn select_first_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
-            Python::attach(|py| {
-                py.detach(|| {
-                    select_first_with_limit(&html, &css, max_size_bytes, truncate_on_limit)
-                })
-            })
+            select_first_with_limit(&html, &css, max_size_bytes, truncate_on_limit)
         })
         .await
         .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
@@ -1229,11 +1234,7 @@ fn first_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
-            Python::attach(|py| {
-                py.detach(|| {
-                    select_first_with_limit(&html, &css, max_size_bytes, truncate_on_limit)
-                })
-            })
+            select_first_with_limit(&html, &css, max_size_bytes, truncate_on_limit)
         })
         .await
         .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
@@ -1252,9 +1253,7 @@ fn xpath_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
-            Python::attach(|py| {
-                py.detach(|| xpath_with_limit(&html, &expr, max_size_bytes, truncate_on_limit))
-            })
+            xpath_with_limit(&html, &expr, max_size_bytes, truncate_on_limit)
         })
         .await
         .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
@@ -1273,11 +1272,7 @@ fn xpath_first_async(
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         tokio::task::spawn_blocking(move || {
-            Python::attach(|py| {
-                py.detach(|| {
-                    xpath_first_with_limit(&html, &expr, max_size_bytes, truncate_on_limit)
-                })
-            })
+            xpath_first_with_limit(&html, &expr, max_size_bytes, truncate_on_limit)
         })
         .await
         .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
@@ -1289,11 +1284,9 @@ fn xpath_first_async(
 fn _select_fragment_async(py: Python<'_>, html: String, css: String) -> PyResult<Bound<'_, PyAny>> {
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        tokio::task::spawn_blocking(move || {
-            Python::attach(|py| py.detach(|| select_fragment(&html, &css)))
-        })
-        .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+        tokio::task::spawn_blocking(move || select_fragment(&html, &css))
+            .await
+            .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 
@@ -1306,11 +1299,9 @@ fn _select_first_fragment_async(
 ) -> PyResult<Bound<'_, PyAny>> {
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        tokio::task::spawn_blocking(move || {
-            Python::attach(|py| py.detach(|| select_fragment_first(&html, &css)))
-        })
-        .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+        tokio::task::spawn_blocking(move || select_fragment_first(&html, &css))
+            .await
+            .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 
@@ -1319,11 +1310,9 @@ fn _select_first_fragment_async(
 fn _xpath_fragment_async(py: Python<'_>, html: String, expr: String) -> PyResult<Bound<'_, PyAny>> {
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        tokio::task::spawn_blocking(move || {
-            Python::attach(|py| py.detach(|| evaluate_fragment_xpath(&html, &expr)))
-        })
-        .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+        tokio::task::spawn_blocking(move || evaluate_fragment_xpath(&html, &expr))
+            .await
+            .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 
@@ -1336,11 +1325,9 @@ fn _xpath_first_fragment_async(
 ) -> PyResult<Bound<'_, PyAny>> {
     let locals = pyo3_async_runtimes::TaskLocals::with_running_loop(py)?.copy_context(py)?;
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        tokio::task::spawn_blocking(move || {
-            Python::attach(|py| py.detach(|| evaluate_fragment_xpath_first(&html, &expr)))
-        })
-        .await
-        .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
+        tokio::task::spawn_blocking(move || evaluate_fragment_xpath_first(&html, &expr))
+            .await
+            .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
     })
 }
 

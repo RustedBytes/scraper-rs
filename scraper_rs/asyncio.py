@@ -9,16 +9,12 @@ import asyncio
 from .scraper_rs import (
     Document as _Document,
     Element as _Element,
-    _select_first_fragment_async,
-    _select_fragment_async,
-    _xpath_first_fragment_async,
-    _xpath_fragment_async,
-    first_async as _first_async,
+    first as _first_sync,
     prettify as _prettify,
-    select_async as _select_async,
-    select_first_async as _select_first_async,
-    xpath_async as _xpath_async,
-    xpath_first_async as _xpath_first_async,
+    select as _select_sync,
+    select_first as _select_first_sync,
+    xpath as _xpath_sync,
+    xpath_first as _xpath_first_sync,
 )
 
 
@@ -67,12 +63,12 @@ class AsyncElement:
         return self._element.get(name, default)
 
     async def select(self, css: str) -> list["AsyncElement"]:
-        return _wrap_elements(await _select_fragment_async(self._element.html, css))
+        await asyncio.sleep(0)
+        return _wrap_elements(self._element.select(css))
 
     async def select_first(self, css: str) -> "AsyncElement | None":
-        return _wrap_element(
-            await _select_first_fragment_async(self._element.html, css)
-        )
+        await asyncio.sleep(0)
+        return _wrap_element(self._element.select_first(css))
 
     async def find(self, css: str) -> "AsyncElement | None":
         return await self.select_first(css)
@@ -81,12 +77,12 @@ class AsyncElement:
         return await self.select(css)
 
     async def xpath(self, expr: str) -> list["AsyncElement"]:
-        return _wrap_elements(await _xpath_fragment_async(self._element.html, expr))
+        await asyncio.sleep(0)
+        return _wrap_elements(self._element.xpath(expr))
 
     async def xpath_first(self, expr: str) -> "AsyncElement | None":
-        return _wrap_element(
-            await _xpath_first_fragment_async(self._element.html, expr)
-        )
+        await asyncio.sleep(0)
+        return _wrap_element(self._element.xpath_first(expr))
 
     def prettify(self) -> str:
         return self._element.prettify()
@@ -119,10 +115,12 @@ class AsyncDocument:
         return self._document.text
 
     async def select(self, css: str) -> list[AsyncElement]:
-        return _wrap_elements(await _select_async(self._document.html, css))
+        await asyncio.sleep(0)
+        return _wrap_elements(self._document.select(css))
 
     async def select_first(self, css: str) -> AsyncElement | None:
-        return _wrap_element(await _select_first_async(self._document.html, css))
+        await asyncio.sleep(0)
+        return _wrap_element(self._document.select_first(css))
 
     async def find(self, css: str) -> AsyncElement | None:
         return await self.select_first(css)
@@ -131,10 +129,16 @@ class AsyncDocument:
         return await self.select(css)
 
     async def xpath(self, expr: str) -> list[AsyncElement]:
-        return _wrap_elements(await _xpath_async(self._document.html, expr))
+        if not self._document.html:
+            return []
+        await asyncio.sleep(0)
+        return _wrap_elements(self._document.xpath(expr))
 
     async def xpath_first(self, expr: str) -> AsyncElement | None:
-        return _wrap_element(await _xpath_first_async(self._document.html, expr))
+        if not self._document.html:
+            return None
+        await asyncio.sleep(0)
+        return _wrap_element(self._document.xpath_first(expr))
 
     def prettify(self) -> str:
         return self._document.prettify()
@@ -190,7 +194,8 @@ async def select(html: str, css: str, **kwargs) -> list["AsyncElement"]:
     Returns:
         A list of AsyncElement wrappers matching the CSS selector
     """
-    return _wrap_elements(await _select_async(html, css, **kwargs))
+    await asyncio.sleep(0)
+    return _wrap_elements(_select_sync(html, css, **kwargs))
 
 
 async def select_first(html: str, css: str, **kwargs) -> "AsyncElement | None":
@@ -207,7 +212,8 @@ async def select_first(html: str, css: str, **kwargs) -> "AsyncElement | None":
     Returns:
         The first AsyncElement matching the CSS selector, or None if no match
     """
-    return _wrap_element(await _select_first_async(html, css, **kwargs))
+    await asyncio.sleep(0)
+    return _wrap_element(_select_first_sync(html, css, **kwargs))
 
 
 async def first(html: str, css: str, **kwargs) -> "AsyncElement | None":
@@ -224,7 +230,8 @@ async def first(html: str, css: str, **kwargs) -> "AsyncElement | None":
     Returns:
         The first AsyncElement matching the CSS selector, or None if no match
     """
-    return _wrap_element(await _first_async(html, css, **kwargs))
+    await asyncio.sleep(0)
+    return _wrap_element(_first_sync(html, css, **kwargs))
 
 
 async def xpath(html: str, expr: str, **kwargs) -> list["AsyncElement"]:
@@ -241,7 +248,8 @@ async def xpath(html: str, expr: str, **kwargs) -> list["AsyncElement"]:
     Returns:
         A list of AsyncElement wrappers matching the XPath expression
     """
-    return _wrap_elements(await _xpath_async(html, expr, **kwargs))
+    await asyncio.sleep(0)
+    return _wrap_elements(_xpath_sync(html, expr, **kwargs))
 
 
 async def xpath_first(html: str, expr: str, **kwargs) -> "AsyncElement | None":
@@ -258,12 +266,14 @@ async def xpath_first(html: str, expr: str, **kwargs) -> "AsyncElement | None":
     Returns:
         The first AsyncElement matching the XPath expression, or None if no match
     """
-    return _wrap_element(await _xpath_first_async(html, expr, **kwargs))
+    await asyncio.sleep(0)
+    return _wrap_element(_xpath_first_sync(html, expr, **kwargs))
 
 
 async def prettify(html: str, **kwargs) -> str:
     """Render HTML as a readable, indented DOM string asynchronously."""
-    return await asyncio.to_thread(_prettify, html, **kwargs)
+    await asyncio.sleep(0)
+    return _prettify(html, **kwargs)
 
 
 __all__ = [
