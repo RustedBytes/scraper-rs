@@ -139,6 +139,7 @@ If you have `just` installed, the repo includes helpers: `just build` (local whe
 ## Projects Using scraper-rs
 
 - [**silkworm**](https://github.com/BitingSnakes/silkworm) - Async web scraping framework on top of Rust
+- [**silkworm-mcp**](https://github.com/BitingSnakes/silkworm-mcp) - An MCP server for silkworm
 
 ## Development
 
