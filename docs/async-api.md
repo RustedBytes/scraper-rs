@@ -4,13 +4,12 @@ The async API lives in `scraper_rs/asyncio.py` and provides awaitable wrappers a
 
 ## Key types
 
-- `AsyncDocument`: wraps a synchronous `Document` and exposes awaitable selectors.
-- `AsyncElement`: wraps a synchronous `Element` and exposes awaitable selectors.
-- `AsyncDocument.document` and `AsyncElement.element` provide access to the underlying sync objects.
+- `AsyncDocument`: stores shareable document state (`html`, `text`) and exposes awaitable selectors.
+- `AsyncElement`: wraps an immutable element snapshot and exposes awaitable nested selectors.
 
 Implementation references:
 - Python wrappers: `scraper_rs/asyncio.py`
-- Rust async helpers: `src/lib.rs` (`select_async`, `select_first_async`, `first_async`, `xpath_async`, `xpath_first_async`)
+- Sync primitives: `src/lib.rs` (`Document`, `Element`, `select`, `select_first`, `first`, `xpath`, `xpath_first`)
 
 ## Top-level async functions
 
@@ -43,7 +42,7 @@ asyncio.run(main())
 
 ## Context management and cleanup
 
-- `AsyncDocument` supports `async with` and closes the underlying `Document` on exit (including exception paths).
+- `AsyncDocument` supports `async with` and clears its stored HTML/text state on exit (including exception paths).
 - `AsyncDocument` also supports sync `with`, but `async with` is preferred inside coroutine code.
 
 ```py
@@ -54,21 +53,15 @@ async with doc:
 
 ## How async execution works
 
-- `scraper_rs/asyncio.py` calls Rust helpers such as `select_async` and `xpath_async`.
-- In `src/lib.rs`, each async helper uses `pyo3_async_runtimes::tokio::future_into_py_with_locals` and `tokio::task::spawn_blocking` to run parsing and selection on a thread pool.
-- `parse` is implemented in Python: it yields to the event loop with `asyncio.sleep(0)` and then constructs a sync `Document` in the current thread.
-- `AsyncDocument` and `AsyncElement` methods pass HTML strings into Rust async helpers, so each async selector call re-parses HTML/fragment input.
+- `scraper_rs/asyncio.py` presents an async API even though the parsing primitives remain synchronous in Rust.
+- Each async entry point yields to the event loop once before invoking the corresponding synchronous Rust helper.
+- `AsyncDocument` stores only `html` and `text`, so coroutine code does not hold a thread-affine sync `Document`.
+- Selector calls still parse per call, just like the sync top-level helper functions.
 
 ## Nested selection on AsyncElement
 
-Nested selectors on `AsyncElement` call fragment helpers defined in `src/lib.rs`:
-
-- `_select_fragment_async`
-- `_select_first_fragment_async`
-- `_xpath_fragment_async`
-- `_xpath_first_fragment_async`
-
-These helpers parse the element's inner HTML fragment each time (see `scraper_rs/asyncio.py` and `src/lib.rs`). This keeps the API simple but means repeated async queries re-parse the fragment.
+Nested selectors on `AsyncElement` call the wrapped sync `Element` snapshot methods from `src/lib.rs`.
+Those methods operate on the stored element HTML fragment each time, which keeps the async wrapper simple but means repeated nested queries re-parse the fragment.
 
 ## Performance notes
 

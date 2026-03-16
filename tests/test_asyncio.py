@@ -4,7 +4,6 @@ import asyncio
 
 import pytest
 
-from scraper_rs import Document, Element
 from scraper_rs import asyncio as async_scraper
 
 
@@ -26,10 +25,9 @@ async def test_async_parse(sample_html: str) -> None:
     doc = await async_scraper.parse(sample_html)
 
     assert isinstance(doc, async_scraper.AsyncDocument)
-    assert isinstance(doc.document, Document)
     assert doc.text == "First Second"
     assert doc.html == sample_html
-    assert doc.prettify().startswith("<html>")
+    assert (await doc.prettify()).startswith("<html>")
 
 
 @pytest.mark.asyncio
@@ -40,10 +38,10 @@ async def test_async_prettify(sample_html: str) -> None:
     top_level = await async_scraper.prettify(sample_html)
 
     assert first_item is not None
-    assert top_level == doc.prettify()
+    assert top_level == await doc.prettify()
     assert top_level.startswith("<html>")
     assert "  <body>" in top_level
-    assert first_item.prettify().startswith('<div class="item" data-id="1">')
+    assert (await first_item.prettify()).startswith('<div class="item" data-id="1">')
 
 
 @pytest.mark.asyncio
@@ -53,7 +51,6 @@ async def test_async_select(sample_html: str) -> None:
 
     assert len(items) == 2
     assert all(isinstance(item, async_scraper.AsyncElement) for item in items)
-    assert all(isinstance(item.element, Element) for item in items)
     assert items[0].tag == "div"
     assert items[0].text == "First"
     assert items[0].attr("data-id") == "1"
@@ -68,7 +65,6 @@ async def test_async_xpath(sample_html: str) -> None:
 
     assert len(links) == 2
     assert all(isinstance(link, async_scraper.AsyncElement) for link in links)
-    assert all(isinstance(link.element, Element) for link in links)
     assert links[0].tag == "a"
     assert links[0].text == "First"
     assert links[0].attr("href") == "/a"
@@ -166,7 +162,6 @@ async def test_async_xpath_first(sample_html: str) -> None:
 
     assert first_link is not None
     assert isinstance(first_link, async_scraper.AsyncElement)
-    assert isinstance(first_link.element, Element)
     assert first_link.tag == "a"
     assert first_link.text == "First"
     assert first_link.attr("href") == "/a"
@@ -209,7 +204,6 @@ async def test_async_select_first(sample_html: str) -> None:
 
     assert first_item is not None
     assert isinstance(first_item, async_scraper.AsyncElement)
-    assert isinstance(first_item.element, Element)
     assert first_item.tag == "div"
     assert first_item.text == "First"
     assert first_item.attr("data-id") == "1"

@@ -4,7 +4,7 @@
 
 `scraper_rs` is a Python extension module implemented in Rust with PyO3. The Rust code in `src/lib.rs` defines the public API (`Document`, `Element`, and top-level helper functions) and is exported as the Python module `scraper_rs`. The Python package in `scraper_rs/__init__.py` simply re-exports the extension module.
 
-Async support lives in pure Python in `scraper_rs/asyncio.py`. It wraps the Rust async helpers defined in `src/lib.rs` and exposes `AsyncDocument` and `AsyncElement` wrappers to make selectors awaitable.
+Async support lives in pure Python in `scraper_rs/asyncio.py`. It exposes `AsyncDocument` and `AsyncElement` wrappers to make selectors awaitable without storing a sync `Document` object in coroutine-facing state.
 
 ## Data flow (sync)
 
@@ -33,16 +33,15 @@ Key code references:
 The async layer is a thin wrapper over the sync API:
 
 - The Python module `scraper_rs/asyncio.py` exposes `AsyncDocument` and `AsyncElement`.
-- Top-level async functions (`select`, `xpath`, `select_first`, `first`, etc) call Rust helpers in `src/lib.rs` such as `select_async`, `first_async`, and `xpath_async`.
-- The Rust async helpers use `pyo3_async_runtimes::tokio::future_into_py_with_locals` and `tokio::task::spawn_blocking` to run blocking parsing and selection on a thread pool.
-- `parse` is implemented in Python (`asyncio.sleep(0)` + sync `Document(...)` construction).
-- `AsyncDocument` / `AsyncElement` selector methods pass HTML strings into Rust async helpers, so selectors parse per call rather than reusing the wrapped `Document` DOM.
-- Nested async selection on elements is implemented via `_select_fragment_async` and `_xpath_fragment_async` in `src/lib.rs`, which parse the element's inner HTML as a fragment.
+- `AsyncDocument` stores only shareable `html` and `text` state; it does not retain a sync `Document`.
+- Top-level async functions (`select`, `xpath`, `select_first`, `first`, etc) yield once and then call the corresponding synchronous Rust helper from `src/lib.rs`.
+- `parse` yields once, constructs a temporary sync `Document`, copies out `html` and `text`, then drops the sync object.
+- `AsyncElement` wraps an immutable sync `Element` snapshot and forwards nested selectors/prettify through awaitable methods.
+- Selector calls still parse per call rather than reusing a persistent DOM, which keeps async objects thread-safe and lightweight.
 
 Code references:
 - Async wrappers: `scraper_rs/asyncio.py`
-- Rust async entry points: `src/lib.rs` (`select_async`, `select_first_async`, `first_async`, `xpath_async`, `xpath_first_async`)
-- Fragment helpers: `src/lib.rs` (`_select_fragment_async`, `_xpath_fragment_async`)
+- Rust sync entry points: `src/lib.rs` (`Document`, `Element`, `select`, `select_first`, `first`, `xpath`, `xpath_first`)
 
 ## Module wiring
 
@@ -50,7 +49,7 @@ The Rust module initializer in `src/lib.rs` registers all classes and functions 
 
 - `#[pymodule] fn scraper_rs(...)` adds `Document`, `Element`, and the top-level functions.
 - The version string is exposed as `__version__` from `env!("CARGO_PKG_VERSION")`.
-- `scraper_rs/__init__.py` re-exports the extension module and forwards `__all__` if it exists.
+- `scraper_rs/__init__.py` re-exports the supported sync API explicitly.
 
 ## Types and public surface
 

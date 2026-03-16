@@ -53,7 +53,7 @@ python examples/demo_prettify_url.py https://example.com --max-lines 80
 
 ### Async usage
 
-The `scraper_rs.asyncio` module keeps the event loop responsive. `parse` yields once (`asyncio.sleep(0)`) before constructing a sync `Document` in the current thread, while `select`/`xpath` helpers run in a thread pool. Parsed documents and elements are wrapped with awaitable selector methods for nested queries:
+The `scraper_rs.asyncio` module exposes an async-first surface for coroutine code. `AsyncDocument` stores shareable HTML/text state instead of a thread-affine sync `Document`, and all selectors are awaitable for consistent async calling style:
 
 ```py
 import asyncio
@@ -76,8 +76,7 @@ asyncio.run(main())
 ```
 
 All async functions accept the same keyword arguments as their sync counterparts (`max_size_bytes`, `truncate_on_limit`, etc.).
-Async wrappers expose the underlying sync objects via `.document` and `.element` if you need direct access.
-`AsyncDocument` supports `async with` for automatic cleanup in coroutine code.
+`AsyncDocument` supports `async with` for automatic cleanup in coroutine code, and `AsyncElement` / `AsyncDocument` both expose async `.prettify()` helpers.
 
 ### Large documents and memory safety
 
@@ -110,7 +109,7 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - `.xpath(expr)` / `.xpath_first(expr)` evaluate XPath expressions that return element nodes.
 - `.prettify()` renders the current DOM as an indented string for readable output/debugging.
 - `.text` returns normalized text; `Document.html` is the original input HTML; `Element.html` is inner HTML.
-- `scraper_rs.asyncio` exposes async `parse`/`select`/`xpath` wrappers to keep the event loop responsive.
+- `scraper_rs.asyncio` exposes async `parse`/`select`/`xpath` wrappers plus awaitable `AsyncDocument` / `AsyncElement` methods.
 - `Element` exposes `.tag`, `.text`, `.html`, `.attrs` plus helpers `.attr(name)`, `.get(name, default)`, `.to_dict()`.
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
 - Elements also expose `.prettify()` to format element HTML with indentation.

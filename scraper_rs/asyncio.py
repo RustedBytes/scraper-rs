@@ -1,8 +1,6 @@
-"""Asyncio wrappers for scraper_rs functions.
+"""Asyncio wrappers for scraper_rs functions."""
 
-This module provides async versions of the main scraper_rs functions,
-including awaitable selectors on nested elements.
-"""
+from __future__ import annotations
 
 import asyncio
 
@@ -10,7 +8,7 @@ from .scraper_rs import (
     Document as _Document,
     Element as _Element,
     first as _first_sync,
-    prettify as _prettify,
+    prettify as _prettify_sync,
     select as _select_sync,
     select_first as _select_first_sync,
     xpath as _xpath_sync,
@@ -28,17 +26,21 @@ def _wrap_elements(elements: list[_Element]) -> list["AsyncElement"]:
     return [AsyncElement(element) for element in elements]
 
 
+def _parse_state(html: str, kwargs: dict[str, int | bool | None]) -> tuple[str, str]:
+    document = _Document(html, **kwargs)
+    try:
+        return document.html, document.text
+    finally:
+        document.close()
+
+
 class AsyncElement:
-    """Async wrapper for Element objects with awaitable selectors."""
+    """Async wrapper for immutable element snapshots."""
 
     __slots__ = ("_element",)
 
     def __init__(self, element: _Element) -> None:
         self._element = element
-
-    @property
-    def element(self) -> _Element:
-        return self._element
 
     @property
     def tag(self) -> str:
@@ -71,10 +73,12 @@ class AsyncElement:
         return _wrap_element(self._element.select_first(css))
 
     async def find(self, css: str) -> "AsyncElement | None":
-        return await self.select_first(css)
+        await asyncio.sleep(0)
+        return _wrap_element(self._element.find(css))
 
     async def css(self, css: str) -> list["AsyncElement"]:
-        return await self.select(css)
+        await asyncio.sleep(0)
+        return _wrap_elements(self._element.css(css))
 
     async def xpath(self, expr: str) -> list["AsyncElement"]:
         await asyncio.sleep(0)
@@ -84,7 +88,8 @@ class AsyncElement:
         await asyncio.sleep(0)
         return _wrap_element(self._element.xpath_first(expr))
 
-    def prettify(self) -> str:
+    async def prettify(self) -> str:
+        await asyncio.sleep(0)
         return self._element.prettify()
 
     def to_dict(self) -> dict[str, str | dict[str, str]]:
@@ -95,32 +100,32 @@ class AsyncElement:
 
 
 class AsyncDocument:
-    """Async wrapper for Document objects with awaitable selectors."""
+    """Async wrapper that stores only shareable document state."""
 
-    __slots__ = ("_document",)
+    __slots__ = ("_html", "_text", "_closed")
 
-    def __init__(self, document: _Document) -> None:
-        self._document = document
-
-    @property
-    def document(self) -> _Document:
-        return self._document
+    def __init__(self, html: str, text: str) -> None:
+        self._html = html
+        self._text = text
+        self._closed = False
 
     @property
     def html(self) -> str:
-        return self._document.html
+        return "" if self._closed else self._html
 
     @property
     def text(self) -> str:
-        return self._document.text
+        return "" if self._closed else self._text
 
     async def select(self, css: str) -> list[AsyncElement]:
-        await asyncio.sleep(0)
-        return _wrap_elements(self._document.select(css))
+        if self._closed:
+            return []
+        return await select(self._html, css)
 
     async def select_first(self, css: str) -> AsyncElement | None:
-        await asyncio.sleep(0)
-        return _wrap_element(self._document.select_first(css))
+        if self._closed:
+            return None
+        return await select_first(self._html, css)
 
     async def find(self, css: str) -> AsyncElement | None:
         return await self.select_first(css)
@@ -129,151 +134,76 @@ class AsyncDocument:
         return await self.select(css)
 
     async def xpath(self, expr: str) -> list[AsyncElement]:
-        if not self._document.html:
+        if self._closed:
             return []
-        await asyncio.sleep(0)
-        return _wrap_elements(self._document.xpath(expr))
+        return await xpath(self._html, expr)
 
     async def xpath_first(self, expr: str) -> AsyncElement | None:
-        if not self._document.html:
+        if self._closed:
             return None
-        await asyncio.sleep(0)
-        return _wrap_element(self._document.xpath_first(expr))
+        return await xpath_first(self._html, expr)
 
-    def prettify(self) -> str:
-        return self._document.prettify()
+    async def prettify(self) -> str:
+        if self._closed:
+            return ""
+        await asyncio.sleep(0)
+        return _prettify_sync(self._html)
 
     def close(self) -> None:
-        self._document.close()
+        self._closed = True
+        self._html = ""
+        self._text = ""
 
     def __enter__(self) -> "AsyncDocument":
-        self._document.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        self._document.__exit__(exc_type, exc_value, traceback)
+        self.close()
 
     async def __aenter__(self) -> "AsyncDocument":
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
-        self._document.__exit__(exc_type, exc_value, traceback)
+        self.close()
 
     def __repr__(self) -> str:
-        return f"<AsyncDocument {self._document!r}>"
+        return f"<AsyncDocument len_html={len(self.html)}>"
 
 
 async def parse(html: str, **kwargs) -> "AsyncDocument":
-    """Parse HTML asynchronously.
-
-    Note: Due to PyO3 limitations, the Document is created in the current thread
-    but yields control to the event loop to avoid blocking.
-
-    Args:
-        html: The HTML string to parse
-        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-
-    Returns:
-        An AsyncDocument wrapper
-    """
     await asyncio.sleep(0)
-    return AsyncDocument(_Document(html, **kwargs))
+    parsed_html, text = _parse_state(html, kwargs)
+    return AsyncDocument(parsed_html, text)
 
 
 async def select(html: str, css: str, **kwargs) -> list["AsyncElement"]:
-    """Select elements by CSS selector asynchronously.
-
-    This function uses pyo3-async-runtimes to run in a thread pool while
-    properly maintaining the Python asyncio context.
-
-    Args:
-        html: The HTML string to parse
-        css: CSS selector string
-        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-
-    Returns:
-        A list of AsyncElement wrappers matching the CSS selector
-    """
     await asyncio.sleep(0)
     return _wrap_elements(_select_sync(html, css, **kwargs))
 
 
 async def select_first(html: str, css: str, **kwargs) -> "AsyncElement | None":
-    """Select the first element by CSS selector asynchronously.
-
-    This function uses pyo3-async-runtimes to run in a thread pool while
-    properly maintaining the Python asyncio context.
-
-    Args:
-        html: The HTML string to parse
-        css: CSS selector string
-        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-
-    Returns:
-        The first AsyncElement matching the CSS selector, or None if no match
-    """
     await asyncio.sleep(0)
     return _wrap_element(_select_first_sync(html, css, **kwargs))
 
 
 async def first(html: str, css: str, **kwargs) -> "AsyncElement | None":
-    """Alias for select_first - select the first element by CSS selector asynchronously.
-
-    This function uses pyo3-async-runtimes to run in a thread pool while
-    properly maintaining the Python asyncio context.
-
-    Args:
-        html: The HTML string to parse
-        css: CSS selector string
-        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-
-    Returns:
-        The first AsyncElement matching the CSS selector, or None if no match
-    """
     await asyncio.sleep(0)
     return _wrap_element(_first_sync(html, css, **kwargs))
 
 
 async def xpath(html: str, expr: str, **kwargs) -> list["AsyncElement"]:
-    """Select elements by XPath expression asynchronously.
-
-    This function uses pyo3-async-runtimes to run in a thread pool while
-    properly maintaining the Python asyncio context.
-
-    Args:
-        html: The HTML string to parse
-        expr: XPath expression string
-        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-
-    Returns:
-        A list of AsyncElement wrappers matching the XPath expression
-    """
     await asyncio.sleep(0)
     return _wrap_elements(_xpath_sync(html, expr, **kwargs))
 
 
 async def xpath_first(html: str, expr: str, **kwargs) -> "AsyncElement | None":
-    """Select the first element by XPath expression asynchronously.
-
-    This function uses pyo3-async-runtimes to run in a thread pool while
-    properly maintaining the Python asyncio context.
-
-    Args:
-        html: The HTML string to parse
-        expr: XPath expression string
-        **kwargs: Additional arguments (max_size_bytes, truncate_on_limit, etc.)
-
-    Returns:
-        The first AsyncElement matching the XPath expression, or None if no match
-    """
     await asyncio.sleep(0)
     return _wrap_element(_xpath_first_sync(html, expr, **kwargs))
 
 
 async def prettify(html: str, **kwargs) -> str:
-    """Render HTML as a readable, indented DOM string asynchronously."""
     await asyncio.sleep(0)
-    return _prettify(html, **kwargs)
+    return _prettify_sync(html, **kwargs)
 
 
 __all__ = [
@@ -281,9 +211,9 @@ __all__ = [
     "AsyncElement",
     "first",
     "parse",
+    "prettify",
     "select",
     "select_first",
     "xpath",
     "xpath_first",
-    "prettify",
 ]
