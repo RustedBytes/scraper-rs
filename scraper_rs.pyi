@@ -8,6 +8,21 @@ class ElementDict(TypedDict):
     html: str
     attrs: dict[str, str]
 
+class HtmlNodeDict(TypedDict, total=False):
+    node_type: str
+    tag: str
+    namespace: str
+    attrs: dict[str, str]
+    children: list[HtmlNodeDict]
+    text: str
+    quirks_mode: str
+    errors: list[str]
+    name: str
+    public_id: str
+    system_id: str
+    target: str
+    data: str
+
 class Element:
     tag: str
     text: str
@@ -62,6 +77,12 @@ class Document:
 def parse(
     html: str, *, max_size_bytes: int | None = ..., truncate_on_limit: bool = False
 ) -> Document: ...
+def parse_document(
+    html: str, *, max_size_bytes: int | None = ..., truncate_on_limit: bool = False
+) -> HtmlNodeDict: ...
+def parse_fragment(
+    html: str, *, max_size_bytes: int | None = ..., truncate_on_limit: bool = False
+) -> HtmlNodeDict: ...
 def prettify(
     html: str, *, max_size_bytes: int | None = ..., truncate_on_limit: bool = False
 ) -> str: ...

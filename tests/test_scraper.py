@@ -7,6 +7,8 @@ from scraper_rs import (
     __version__,
     first,
     parse,
+    parse_document,
+    parse_fragment,
     prettify,
     select,
     select_first,
@@ -202,6 +204,54 @@ def test_top_level_parse_and_select(sample_html: str) -> None:
         "Second",
     ]
     assert xpath_first(sample_html, "//div[@data-id='1']/a").text == "First"
+
+
+def test_parse_document_to_dict(sample_html: str) -> None:
+    parsed = parse_document(sample_html)
+
+    assert parsed["node_type"] == "document"
+    assert parsed["quirks_mode"] in {"quirks", "limited-quirks", "no-quirks"}
+    assert isinstance(parsed["errors"], list)
+
+    html_node = next(
+        child
+        for child in parsed["children"]
+        if child["node_type"] == "element" and child["tag"] == "html"
+    )
+    body_node = next(
+        child
+        for child in html_node["children"]
+        if child["node_type"] == "element" and child["tag"] == "body"
+    )
+    first_div = next(
+        child
+        for child in body_node["children"]
+        if child["node_type"] == "element" and child["tag"] == "div"
+    )
+
+    assert first_div["attrs"]["class"] == "item"
+    assert first_div["attrs"]["data-id"] == "1"
+
+
+def test_parse_fragment_to_dict() -> None:
+    parsed = parse_fragment('<div class="item">Hello <span>world</span><!-- note --></div>')
+
+    assert parsed["node_type"] == "document_fragment"
+    assert parsed["errors"] == []
+
+    div_node = next(
+        child
+        for child in parsed["children"]
+        if child["node_type"] == "element" and child["tag"] == "div"
+    )
+
+    assert div_node["attrs"]["class"] == "item"
+    assert div_node["children"][0]["node_type"] == "text"
+    assert div_node["children"][0]["text"] == "Hello "
+    assert div_node["children"][1]["tag"] == "span"
+    assert div_node["children"][1]["children"][0]["text"] == "world"
+    assert div_node["children"][2]["node_type"] == "comment"
+    assert div_node["children"][2]["text"] == " note "
 
 
 def test_css_alias_and_invalid_selector(sample_html: str) -> None:

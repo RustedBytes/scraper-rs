@@ -9,6 +9,8 @@ __all__ = [
     "__version__",
     "first",
     "parse",
+    "parse_document",
+    "parse_fragment",
     "prettify",
     "select",
     "select_first",
