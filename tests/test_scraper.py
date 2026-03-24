@@ -234,7 +234,9 @@ def test_parse_document_to_dict(sample_html: str) -> None:
 
 
 def test_parse_fragment_to_dict() -> None:
-    parsed = parse_fragment('<div class="item">Hello <span>world</span><!-- note --></div>')
+    parsed = parse_fragment(
+        '<div class="item">Hello <span>world</span><!-- note --></div>'
+    )
 
     assert parsed["node_type"] == "document_fragment"
     assert parsed["errors"] == []

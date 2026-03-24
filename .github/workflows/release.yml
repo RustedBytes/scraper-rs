@@ -10,12 +10,24 @@ permissions:
 
 jobs:
   build-wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Build wheels on ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-latest
+            platform: linux
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            platform: linux
+          - name: windows
+            runner: windows-latest
+            platform: windows
+          - name: macos
+            runner: macos-latest
+            platform: macos
 
     steps:
       - name: Checkout repository
@@ -27,7 +39,7 @@ jobs:
           python-version: '3.10'
 
       - name: Build wheels (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.platform == 'linux'
         uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -35,7 +47,7 @@ jobs:
           manylinux: auto
 
       - name: Build wheels (Windows/macOS)
-        if: matrix.os == 'windows-latest' || matrix.os == 'macos-latest'
+        if: matrix.platform == 'windows' || matrix.platform == 'macos'
         uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -44,7 +56,7 @@ jobs:
       - name: Upload wheels as artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.name }}
           path: dist/*.whl
 
       - name: Upload wheels to release
@@ -56,13 +68,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-free-threaded-wheels:
-    name: Build free-threaded wheels on ${{ matrix.os }} (Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
+    name: Build free-threaded wheels on ${{ matrix.name }} (Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.13t', '3.14t']
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-latest
+            platform: linux
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            platform: linux
+          - name: windows
+            runner: windows-latest
+            platform: windows
+          - name: macos
+            runner: macos-latest
+            platform: macos
 
     steps:
       - name: Checkout repository
@@ -75,20 +99,20 @@ jobs:
           allow-prereleases: true
 
       - name: Install zig (for Linux manylinux builds)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.platform == 'linux'
         uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.11.0
 
       - name: Build free-threaded wheels (Linux - using zig for manylinux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.platform == 'linux'
         uses: PyO3/maturin-action@v1
         with:
           command: build
           args: --release --strip --out dist --zig
 
       - name: Build free-threaded wheels (Windows/macOS)
-        if: matrix.os == 'windows-latest' || matrix.os == 'macos-latest'
+        if: matrix.platform == 'windows' || matrix.platform == 'macos'
         uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -97,7 +121,7 @@ jobs:
       - name: Upload free-threaded wheels as artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wheels-free-threaded-${{ matrix.os }}-${{ matrix.python-version }}
+          name: wheels-free-threaded-${{ matrix.name }}-${{ matrix.python-version }}
           path: dist/*.whl
 
       - name: Upload free-threaded wheels to release
