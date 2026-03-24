@@ -38,13 +38,37 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Install zig (for Linux manylinux builds)
+        if: matrix.platform == 'linux'
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+
       - name: Build wheels (Linux)
         if: matrix.platform == 'linux'
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --strip --out dist
-          manylinux: auto
+          args: --release --strip --out dist --zig --interpreter python3.10
+
+      - name: Verify Linux wheels are abi3
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [ ${#wheels[@]} -eq 0 ]; then
+            echo "No wheels were built in dist/" >&2
+            exit 1
+          fi
+
+          for wheel in "${wheels[@]}"; do
+            name="$(basename "$wheel")"
+            if [[ "$name" != *abi3* ]]; then
+              echo "Expected abi3 Linux wheel, got: $name" >&2
+              exit 1
+            fi
+          done
 
       - name: Build wheels (Windows/macOS)
         if: matrix.platform == 'windows' || matrix.platform == 'macos'
@@ -109,7 +133,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --strip --out dist --zig
+          args: --release --strip --out dist --zig --interpreter python
 
       - name: Build free-threaded wheels (Windows/macOS)
         if: matrix.platform == 'windows' || matrix.platform == 'macos'
