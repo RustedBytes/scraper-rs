@@ -1,13 +1,13 @@
 # Limits, truncation, and errors
 
-This document describes size limits, truncation, and error behavior implemented in `src/lib.rs` and validated by `tests/test_scraper.py` and `tests/test_asyncio.py`.
+This document describes size limits, truncation, and error behavior implemented under `src/` and validated by `tests/test_scraper.py` and `tests/test_asyncio.py`.
 
 ## Size limits
 
-By default, parsing is capped at 1 GiB (`DEFAULT_MAX_PARSE_BYTES` in `src/lib.rs`). The limit applies to:
+By default, parsing is capped at 1 GiB (`DEFAULT_MAX_PARSE_BYTES` in `src/limits.rs`). The limit applies to:
 
 - `Document(...)` and `Document.from_html(...)`
-- Top-level helpers (`parse`, `select`, `select_first`, `first`, `xpath`, `xpath_first`)
+- Top-level helpers (`parse`, `parse_document`, `parse_fragment`, `prettify`, `select`, `select_first`, `first`, `xpath`, `xpath_first`)
 - Async helpers (`scraper_rs.asyncio.*`)
 
 You can override the limit with `max_size_bytes`:
@@ -28,11 +28,11 @@ If the HTML is larger than the limit, a `ValueError` is raised:
 ValueError: HTML document is too large to parse: ...
 ```
 
-This behavior is enforced by `ensure_within_size_limit` in `src/lib.rs`.
+This behavior is enforced by `ensure_within_size_limit` in `src/limits.rs`.
 
 ## Truncation
 
-If you prefer parsing a truncated document instead of raising an error, set `truncate_on_limit=True`. Truncation is UTF-8 safe: the code backs up to a character boundary to avoid breaking multi-byte characters (see `ensure_within_size_limit` in `src/lib.rs` and `test_truncate_utf8_boundary` in `tests/test_scraper.py`).
+If you prefer parsing a truncated document instead of raising an error, set `truncate_on_limit=True`. Truncation is UTF-8 safe: the code backs up to a character boundary to avoid breaking multi-byte characters (see `ensure_within_size_limit` in `src/limits.rs` and `test_truncate_utf8_boundary` in `tests/test_scraper.py`).
 
 ```py
 from scraper_rs import Document
@@ -55,7 +55,7 @@ items = await async_scraper.select(
 
 ### CSS selector errors
 
-Invalid CSS selectors raise `ValueError` from `parse_selector` in `src/lib.rs`.
+Invalid CSS selectors raise `ValueError` from `parse_selector` in `src/selectors.rs`.
 
 ```py
 from scraper_rs import Document
@@ -68,7 +68,7 @@ except ValueError as exc:
 
 ### XPath errors
 
-Invalid XPath expressions (including empty expressions) raise `ValueError` during compilation/evaluation in `src/lib.rs` (`compile_xpath`, `evaluate_xpath_nodes`, `evaluate_xpath_first_element`). XPath queries must evaluate to node sets of element nodes; attribute or text nodes are rejected during conversion (`snapshot_xpath_element`).
+Invalid XPath expressions (including empty expressions) raise `ValueError` during compilation/evaluation in `src/xpath.rs` (`compile_xpath`, `evaluate_xpath_nodes`, `evaluate_xpath_first_element`). XPath queries must evaluate to node sets of element nodes; attribute or text nodes are rejected during conversion.
 
 ```py
 from scraper_rs import Document

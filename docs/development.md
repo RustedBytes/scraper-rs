@@ -4,11 +4,12 @@ This document summarizes the build, test, and release workflow with references t
 
 ## Project layout
 
-- Rust extension module: `src/lib.rs`
+- Rust extension module entry point: `src/lib.rs`
+- Core Rust modules: `src/document.rs`, `src/element.rs`, `src/functions.rs`, `src/selectors.rs`, `src/xpath.rs`, `src/limits.rs`, `src/prettify.rs`, `src/html5_dict.rs`
 - Python package shim and async wrappers: `scraper_rs/__init__.py`, `scraper_rs/asyncio.py`
 - Type stubs: `scraper_rs.pyi`, `scraper_rs/asyncio.pyi`
-- Examples: `examples/demo.py`, `examples/demo_asyncio.py`
-- Tests: `tests/test_scraper.py`, `tests/test_asyncio.py`
+- Examples: `examples/demo.py`, `examples/demo_asyncio.py`, `examples/demo_async_document.py`, `examples/demo_prettify_url.py`
+- Tests: `tests/test_scraper.py`, `tests/test_asyncio.py`, `tests/test_performance.py`
 - Build metadata: `Cargo.toml`, `pyproject.toml`
 
 ## Common tasks (justfile)
@@ -58,4 +59,4 @@ Versioning is defined in both `Cargo.toml` and `pyproject.toml` and should stay 
 - `.github/workflows/release.yml`
 - `.github/workflows/bump-version.yml`
 
-The release workflow builds manylinux wheels using the official maturin Docker image (see `justfile` for the local analog).
+The release workflow builds abi3 wheels for Linux, Windows, and macOS, plus free-threaded wheels for Python 3.13t and 3.14t. The local `just build_manylinux` helper builds a manylinux wheel with the official maturin Docker image.

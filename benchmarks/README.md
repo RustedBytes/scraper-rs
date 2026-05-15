@@ -43,7 +43,7 @@ Tests are run against three HTML document sizes:
 - **Medium**: ~5KB, 100 items
 - **Large**: ~50KB, 1000 items
 
-The benchmark also tests concurrent execution of async functions to demonstrate their value in concurrent scenarios.
+The benchmark also tests `asyncio.gather` scheduling overhead for the async wrappers. The current Python wrappers are awaitable for coroutine API consistency, but they do not make CPU-bound parsing parallel on their own.
 
 ### bench_vs_markupever.py
 
@@ -92,9 +92,9 @@ uv run benchmarks/bench_parse_memory.py --sizes 4k,16k,64k,256k,1m,4m
 
 - **Sync functions**: Best for sequential, CPU-bound operations
 - **Async functions (sequential)**: Similar to sync with slight overhead for context switching
-- **Async functions (concurrent)**: Show significant speedup when running multiple operations simultaneously
+- **Async functions (concurrent)**: Measure coroutine scheduling overhead; do not assume CPU-bound parsing runs in parallel
 
-Note that for CPU-bound operations like HTML parsing, synchronous functions may be faster for sequential execution. However, async functions enable better responsiveness in I/O-bound applications and allow concurrent operations without blocking.
+Note that for CPU-bound operations like HTML parsing, synchronous functions are generally the clearest baseline. The async wrappers are most useful when integrating scraper-rs into coroutine-oriented application code.
 
 ## Test run
 
@@ -228,11 +228,9 @@ Asynchronous functions (concurrent, 10 tasks):
 Summary
 ================================================================================
 
-Note: Async functions show their value in concurrent scenarios where
-      multiple operations can be performed simultaneously without blocking.
-      For CPU-bound operations like HTML parsing, sync functions may be
-      faster for sequential execution, but async allows better responsiveness
-      in I/O-bound applications.
+Note: Async wrappers provide an awaitable interface for coroutine-oriented
+      code, but CPU-bound parsing is still best compared against the sync
+      baseline. Concurrent async timings primarily reflect scheduling overhead.
 ```
 
 
@@ -301,11 +299,9 @@ Asynchronous functions (concurrent, 10 tasks):
 Summary
 ================================================================================
 
-Note: Async functions show their value in concurrent scenarios where
-      multiple operations can be performed simultaneously without blocking.
-      For CPU-bound operations like HTML parsing, sync functions may be
-      faster for sequential execution, but async allows better responsiveness
-      in I/O-bound applications.
+Note: Async wrappers provide an awaitable interface for coroutine-oriented
+      code, but CPU-bound parsing is still best compared against the sync
+      baseline. Concurrent async timings primarily reflect scheduling overhead.
 ```
 
 ## Running markupever comparison benchmark

@@ -9,7 +9,7 @@ The async API lives in `scraper_rs/asyncio.py` and provides awaitable wrappers a
 
 Implementation references:
 - Python wrappers: `scraper_rs/asyncio.py`
-- Sync primitives: `src/lib.rs` (`Document`, `Element`, `select`, `select_first`, `first`, `xpath`, `xpath_first`)
+- Sync primitives: `src/document.rs`, `src/element.rs`, and `src/functions.rs`
 
 ## Top-level async functions
 
@@ -60,11 +60,11 @@ async with doc:
 
 ## Nested selection on AsyncElement
 
-Nested selectors on `AsyncElement` call the wrapped sync `Element` snapshot methods from `src/lib.rs`.
+Nested selectors on `AsyncElement` call the wrapped sync `Element` snapshot methods from `src/element.rs`.
 Those methods operate on the stored element HTML fragment each time, which keeps the async wrapper simple but means repeated nested queries re-parse the fragment.
 
 ## Performance notes
 
 - Async selectors operate on HTML strings and parse on each call, which is ideal for one-shot async usage but can be less efficient for repeated queries over the same DOM.
 - If you need repeated queries over a single document and can afford synchronous calls, use the sync `Document` directly (see `api.md`).
-- For async workloads, batch operations with `asyncio.gather` to overlap parsing (see `tests/test_asyncio.py` and `examples/demo_asyncio.py`).
+- `asyncio.gather` is useful for keeping calling code uniform, but these Python wrappers do not make CPU-bound parsing parallel on their own.

@@ -12,9 +12,10 @@ This folder contains detailed documentation for the scraper-rs project (Python b
 
 ## Code map
 
-- Rust extension module and core logic: `src/lib.rs`
+- Rust extension module entry point: `src/lib.rs`
+- Core Rust logic: `src/document.rs`, `src/element.rs`, `src/functions.rs`, `src/selectors.rs`, `src/xpath.rs`, `src/limits.rs`, `src/prettify.rs`, `src/html5_dict.rs`
 - Python package export shim: `scraper_rs/__init__.py`
 - Async wrappers: `scraper_rs/asyncio.py`
 - Type stubs: `scraper_rs.pyi`, `scraper_rs/asyncio.pyi`
-- Examples: `examples/demo.py`, `examples/demo_asyncio.py`
-- Tests: `tests/test_scraper.py`, `tests/test_asyncio.py`
+- Examples: `examples/demo.py`, `examples/demo_asyncio.py`, `examples/demo_async_document.py`, `examples/demo_prettify_url.py`
+- Tests: `tests/test_scraper.py`, `tests/test_asyncio.py`, `tests/test_performance.py`

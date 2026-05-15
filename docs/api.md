@@ -1,6 +1,6 @@
 # Synchronous API (scraper_rs)
 
-This document describes the public synchronous Python API implemented in `src/lib.rs` and typed in `scraper_rs.pyi`.
+This document describes the public synchronous Python API implemented by the Rust modules under `src/` and typed in `scraper_rs.pyi`.
 
 ## Document
 
@@ -16,7 +16,7 @@ doc = Document(
 )
 ```
 
-Key properties and methods (see `src/lib.rs` and `scraper_rs.pyi`):
+Key properties and methods (see `src/document.rs` and `scraper_rs.pyi`):
 
 - `html`: the original HTML string stored by the `Document`.
 - `text`: normalized text content (whitespace collapsed).
@@ -32,8 +32,8 @@ Key properties and methods (see `src/lib.rs` and `scraper_rs.pyi`):
 - Context manager support: `with Document(html) as doc: ...`.
 
 Implementation references:
-- `Document::parse_with_limit` and `Document::new` in `src/lib.rs`
-- `Document::close`, `__enter__`, `__exit__` in `src/lib.rs`
+- `Document::parse_with_limit` and `Document::new` in `src/document.rs`
+- `Document::close`, `__enter__`, `__exit__` in `src/document.rs`
 
 Example:
 
@@ -56,7 +56,7 @@ with Document(html) as doc:
 
 ## Element
 
-`Element` is a snapshot of a matched HTML element. It stores owned `tag` and serialized element HTML eagerly, then computes `text`, `html` (inner HTML), and `attrs` lazily on first access. This keeps Python usage lifetime-safe while reducing upfront allocations (see `snapshot_element` and `snapshot_xpath_element` in `src/lib.rs`).
+`Element` is a snapshot of a matched HTML element. It stores owned `tag` and serialized element HTML eagerly, then computes `text`, `html` (inner HTML), and `attrs` lazily on first access. This keeps Python usage lifetime-safe while reducing upfront allocations (see `snapshot_element` in `src/element.rs` and XPath element conversion helpers in `src/xpath.rs`).
 
 Fields and methods:
 
@@ -67,8 +67,8 @@ Fields and methods:
 - `prettify() -> str`: indented element HTML for readable output.
 - Selector helpers: `select`, `select_first`, `find`, `css`, `xpath`, `xpath_first`.
 
-Element selection uses fragment parsing helpers in `src/lib.rs`:
-- `select_fragment` for CSS, `evaluate_fragment_xpath` for XPath.
+Element selection uses fragment parsing helpers:
+- `select_fragment` in `src/selectors.rs` for CSS, `evaluate_fragment_xpath` in `src/xpath.rs` for XPath.
 
 Example (nested selection):
 
@@ -85,6 +85,8 @@ if item:
 The top-level helpers parse the HTML and immediately run the query. They are useful for one-shot usage:
 
 - `parse(html, *, max_size_bytes=None, truncate_on_limit=False) -> Document`
+- `parse_document(html, *, max_size_bytes=None, truncate_on_limit=False) -> HtmlNodeDict`
+- `parse_fragment(html, *, max_size_bytes=None, truncate_on_limit=False) -> HtmlNodeDict`
 - `prettify(html, *, max_size_bytes=None, truncate_on_limit=False) -> str`
 - `select(html, css, *, max_size_bytes=None, truncate_on_limit=False) -> list[Element]`
 - `select_first(html, css, *, max_size_bytes=None, truncate_on_limit=False) -> Element | None`
@@ -92,15 +94,16 @@ The top-level helpers parse the HTML and immediately run the query. They are use
 - `xpath(html, expr, *, max_size_bytes=None, truncate_on_limit=False) -> list[Element]`
 - `xpath_first(html, expr, *, max_size_bytes=None, truncate_on_limit=False) -> Element | None`
 
-These functions are defined in `src/lib.rs` and registered in the module initializer at the bottom of the file.
+These functions are defined in `src/functions.rs` and registered in the module initializer in `src/lib.rs`.
 
 Example:
 
 ```py
-from scraper_rs import select, xpath_first
+from scraper_rs import parse_fragment, select, xpath_first
 
 links = select(html, "a[href]")
 first = xpath_first(html, "//div[@class='item']/a")
+tree = parse_fragment("<a href='/x'>link</a>")
 ```
 
 ## Version and type hints

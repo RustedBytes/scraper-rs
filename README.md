@@ -27,8 +27,8 @@ print(items[0].to_dict())        # {"tag": "div", "text": "First", "html": "<a..
 
 first_link = doc.select_first("a[href]")  # alias: doc.find(...)
 print(first_link.text, first_link.attr("href"))  # First /a
-links_within_first = first_link.select("a[href]")
-print([link.attr("href") for link in links_within_first])  # ["/a"]
+links_within_first_item = items[0].select("a[href]")
+print([link.attr("href") for link in links_within_first_item])  # ["/a"]
 
 # XPath (element results only)
 xpath_items = doc.xpath("//div[@class='item']/a")
@@ -114,6 +114,7 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
 - Elements also expose `.prettify()` to format element HTML with indentation.
 - Top-level helpers mirror the class methods: `parse(html)`, `prettify(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
+- Parse-tree helpers `parse_document(html)` and `parse_fragment(html)` return html5ever-style dictionaries for callers that need structural node data.
 - `max_size_bytes` lets you fail fast on oversized HTML; defaults to a 1 GiB limit.
 - `truncate_on_limit` allows parsing a truncated version (limited to `max_size_bytes`) of oversized HTML instead of raising an error.
 - Call `doc.close()` (or `with Document(html) as doc: ...`) to free parsed DOM resources when you're done.
@@ -143,11 +144,11 @@ If you have `just` installed, the repo includes helpers: `just build` (local whe
 
 ## Development
 
-Requirements: Rust toolchain, Python 3.10+, `maturin`, `pytest`, and `pytest-asyncio` for tests.
+Requirements: Rust toolchain, Python 3.10+, `uv`, `maturin`, `pytest`, and `pytest-asyncio` for tests.
 
 - Run tests: `just test` or `uv run pytest tests/`
 - Format code: `just fmt` (or `cargo fmt --all` and `uv run ruff format`)
 - Lint Rust: `just lint` (or `cargo clippy --all-targets --all-features -- -D warnings`)
 - The PyO3 module name is `scraper_rs`; the Rust crate is built as `cdylib`.
 
-Contributions and issues are welcome. If you add public API, please extend `tests/test_scraper.py` and the example script accordingly.
+Contributions and issues are welcome. If you add public API, please extend the relevant tests, type stubs, docs, and examples accordingly.
