@@ -21,7 +21,12 @@ where
     F: FnOnce() -> PyResult<T> + Send + 'static,
     T: Send + 'static,
 {
-    tokio::task::spawn_blocking(work)
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    rayon::spawn(move || {
+        let _ = sender.send(work());
+    });
+
+    receiver
         .await
         .map_err(|e| PyValueError::new_err(format!("Task join error: {e}")))?
 }

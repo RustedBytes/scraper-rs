@@ -2,36 +2,27 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from .scraper_rs import (
-    Document as _Document,
-    Element as _Element,
-    first as _first_sync,
-    prettify as _prettify_sync,
-    select as _select_sync,
-    select_first as _select_first_sync,
-    xpath as _xpath_sync,
-    xpath_first as _xpath_first_sync,
+    _AsyncDocumentCore,
+    _AsyncElementCore,
+    first_async as _first_async,
+    parse_async as _parse_async,
+    prettify_async as _prettify_async,
+    select_async as _select_async,
+    select_first_async as _select_first_async,
+    xpath_async as _xpath_async,
+    xpath_first_async as _xpath_first_async,
 )
 
 
-def _wrap_element(element: _Element | None) -> "AsyncElement | None":
+def _wrap_element(element: _AsyncElementCore | None) -> "AsyncElement | None":
     if element is None:
         return None
     return AsyncElement(element)
 
 
-def _wrap_elements(elements: list[_Element]) -> list["AsyncElement"]:
+def _wrap_elements(elements: list[_AsyncElementCore]) -> list["AsyncElement"]:
     return [AsyncElement(element) for element in elements]
-
-
-def _parse_state(html: str, kwargs: dict[str, int | bool | None]) -> tuple[str, str]:
-    document = _Document(html, **kwargs)
-    try:
-        return document.html, document.text
-    finally:
-        document.close()
 
 
 class AsyncElement:
@@ -39,7 +30,7 @@ class AsyncElement:
 
     __slots__ = ("_element",)
 
-    def __init__(self, element: _Element) -> None:
+    def __init__(self, element: _AsyncElementCore) -> None:
         self._element = element
 
     @property
@@ -65,32 +56,25 @@ class AsyncElement:
         return self._element.get(name, default)
 
     async def select(self, css: str) -> list["AsyncElement"]:
-        await asyncio.sleep(0)
-        return _wrap_elements(self._element.select(css))
+        return _wrap_elements(await self._element.select(css))
 
     async def select_first(self, css: str) -> "AsyncElement | None":
-        await asyncio.sleep(0)
-        return _wrap_element(self._element.select_first(css))
+        return _wrap_element(await self._element.select_first(css))
 
     async def find(self, css: str) -> "AsyncElement | None":
-        await asyncio.sleep(0)
-        return _wrap_element(self._element.find(css))
+        return _wrap_element(await self._element.find(css))
 
     async def css(self, css: str) -> list["AsyncElement"]:
-        await asyncio.sleep(0)
-        return _wrap_elements(self._element.css(css))
+        return _wrap_elements(await self._element.css(css))
 
     async def xpath(self, expr: str) -> list["AsyncElement"]:
-        await asyncio.sleep(0)
-        return _wrap_elements(self._element.xpath(expr))
+        return _wrap_elements(await self._element.xpath(expr))
 
     async def xpath_first(self, expr: str) -> "AsyncElement | None":
-        await asyncio.sleep(0)
-        return _wrap_element(self._element.xpath_first(expr))
+        return _wrap_element(await self._element.xpath_first(expr))
 
     async def prettify(self) -> str:
-        await asyncio.sleep(0)
-        return self._element.prettify()
+        return await self._element.prettify()
 
     def to_dict(self) -> dict[str, str | dict[str, str]]:
         return self._element.to_dict()
@@ -100,59 +84,44 @@ class AsyncElement:
 
 
 class AsyncDocument:
-    """Async wrapper that stores only shareable document state."""
+    """Async wrapper around Rust-owned document state."""
 
-    __slots__ = ("_html", "_text", "_closed")
+    __slots__ = ("_document",)
 
-    def __init__(self, html: str, text: str) -> None:
-        self._html = html
-        self._text = text
-        self._closed = False
+    def __init__(self, document: _AsyncDocumentCore) -> None:
+        self._document = document
 
     @property
     def html(self) -> str:
-        return "" if self._closed else self._html
+        return self._document.html
 
     @property
     def text(self) -> str:
-        return "" if self._closed else self._text
+        return self._document.text
 
     async def select(self, css: str) -> list[AsyncElement]:
-        if self._closed:
-            return []
-        return await select(self._html, css)
+        return _wrap_elements(await self._document.select(css))
 
     async def select_first(self, css: str) -> AsyncElement | None:
-        if self._closed:
-            return None
-        return await select_first(self._html, css)
+        return _wrap_element(await self._document.select_first(css))
 
     async def find(self, css: str) -> AsyncElement | None:
-        return await self.select_first(css)
+        return _wrap_element(await self._document.find(css))
 
     async def css(self, css: str) -> list[AsyncElement]:
-        return await self.select(css)
+        return _wrap_elements(await self._document.css(css))
 
     async def xpath(self, expr: str) -> list[AsyncElement]:
-        if self._closed:
-            return []
-        return await xpath(self._html, expr)
+        return _wrap_elements(await self._document.xpath(expr))
 
     async def xpath_first(self, expr: str) -> AsyncElement | None:
-        if self._closed:
-            return None
-        return await xpath_first(self._html, expr)
+        return _wrap_element(await self._document.xpath_first(expr))
 
     async def prettify(self) -> str:
-        if self._closed:
-            return ""
-        await asyncio.sleep(0)
-        return _prettify_sync(self._html)
+        return await self._document.prettify()
 
     def close(self) -> None:
-        self._closed = True
-        self._html = ""
-        self._text = ""
+        self._document.close()
 
     def __enter__(self) -> "AsyncDocument":
         return self
@@ -167,43 +136,35 @@ class AsyncDocument:
         self.close()
 
     def __repr__(self) -> str:
-        return f"<AsyncDocument len_html={len(self.html)}>"
+        return repr(self._document)
 
 
 async def parse(html: str, **kwargs) -> "AsyncDocument":
-    await asyncio.sleep(0)
-    parsed_html, text = _parse_state(html, kwargs)
-    return AsyncDocument(parsed_html, text)
+    return AsyncDocument(await _parse_async(html, **kwargs))
 
 
 async def select(html: str, css: str, **kwargs) -> list["AsyncElement"]:
-    await asyncio.sleep(0)
-    return _wrap_elements(_select_sync(html, css, **kwargs))
+    return _wrap_elements(await _select_async(html, css, **kwargs))
 
 
 async def select_first(html: str, css: str, **kwargs) -> "AsyncElement | None":
-    await asyncio.sleep(0)
-    return _wrap_element(_select_first_sync(html, css, **kwargs))
+    return _wrap_element(await _select_first_async(html, css, **kwargs))
 
 
 async def first(html: str, css: str, **kwargs) -> "AsyncElement | None":
-    await asyncio.sleep(0)
-    return _wrap_element(_first_sync(html, css, **kwargs))
+    return _wrap_element(await _first_async(html, css, **kwargs))
 
 
 async def xpath(html: str, expr: str, **kwargs) -> list["AsyncElement"]:
-    await asyncio.sleep(0)
-    return _wrap_elements(_xpath_sync(html, expr, **kwargs))
+    return _wrap_elements(await _xpath_async(html, expr, **kwargs))
 
 
 async def xpath_first(html: str, expr: str, **kwargs) -> "AsyncElement | None":
-    await asyncio.sleep(0)
-    return _wrap_element(_xpath_first_sync(html, expr, **kwargs))
+    return _wrap_element(await _xpath_first_async(html, expr, **kwargs))
 
 
 async def prettify(html: str, **kwargs) -> str:
-    await asyncio.sleep(0)
-    return _prettify_sync(html, **kwargs)
+    return await _prettify_async(html, **kwargs)
 
 
 __all__ = [

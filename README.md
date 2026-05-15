@@ -76,6 +76,7 @@ asyncio.run(main())
 ```
 
 All async functions accept the same keyword arguments as their sync counterparts (`max_size_bytes`, `truncate_on_limit`, etc.).
+CPU-bound async parsing and selection work is offloaded through the Rust async core onto Rayon worker threads so concurrent coroutines do not run that work on the event-loop thread.
 `AsyncDocument` supports `async with` for automatic cleanup in coroutine code, and `AsyncElement` / `AsyncDocument` both expose async `.prettify()` helpers.
 
 ### Large documents and memory safety
