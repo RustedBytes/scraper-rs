@@ -23,6 +23,7 @@ env/
 .ruff_cache/
 .pytest_cache/
 .hypothesis/
+.uv-cache/
 .coverage
 .coverage.*
 htmlcov/
