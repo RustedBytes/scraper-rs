@@ -5,6 +5,7 @@ use pyo3::prelude::*;
 
 pub(crate) const DEFAULT_MAX_PARSE_BYTES: usize = 1_073_741_824; // 1 GiB
 
+#[inline]
 pub(crate) fn ensure_within_size_limit(
     html: &str,
     max_size_bytes: usize,

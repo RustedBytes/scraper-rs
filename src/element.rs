@@ -178,6 +178,7 @@ impl Element {
 }
 
 /// Convert a scraper `ElementRef` into our owned Element snapshot.
+#[inline]
 pub(crate) fn snapshot_element(el: ElementRef<'_>) -> Element {
     let tag = el.value().name().to_string();
     // Store only the full element HTML; derive other fields lazily to reduce
@@ -194,6 +195,7 @@ pub(crate) fn snapshot_element(el: ElementRef<'_>) -> Element {
 }
 
 impl Element {
+    #[inline]
     pub(crate) fn from_parts(tag: String, outer_html: String) -> Self {
         Self {
             tag,

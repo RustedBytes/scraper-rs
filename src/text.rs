@@ -15,6 +15,7 @@ pub(crate) fn truncate_for_repr(s: &str, max_chars: usize) -> String {
     out
 }
 
+#[inline]
 fn push_normalized(out: &mut String, input: &str, needs_space: &mut bool) {
     for word in input.split_whitespace() {
         if *needs_space {
@@ -25,6 +26,7 @@ fn push_normalized(out: &mut String, input: &str, needs_space: &mut bool) {
     }
 }
 
+#[inline]
 pub(crate) fn normalize_text_nodes<'a, I>(chunks: I) -> String
 where
     I: IntoIterator<Item = &'a str>,

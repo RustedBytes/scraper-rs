@@ -7,6 +7,7 @@ pub(crate) struct FixedCache<T> {
 }
 
 impl<T> FixedCache<T> {
+    #[inline]
     pub(crate) fn new(capacity: usize) -> Self {
         Self {
             map: HashMap::new(),
@@ -15,6 +16,7 @@ impl<T> FixedCache<T> {
         }
     }
 
+    #[inline]
     pub(crate) fn get(&self, key: &str) -> Option<&T> {
         self.map.get(key)
     }
