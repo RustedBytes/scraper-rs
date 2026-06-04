@@ -3,7 +3,6 @@ use std::sync::OnceLock;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use scraper::element_ref::ElementRef;
 
 use crate::prettify::prettify_fragment_html;
 use crate::selectors::{select_fragment, select_fragment_first};
@@ -174,23 +173,6 @@ impl Element {
         let text_str = self.text();
         let text_preview = truncate_for_repr(text_str.trim(), 40);
         format!("<Element tag='{}' text={}>", self.tag, text_preview)
-    }
-}
-
-/// Convert a scraper `ElementRef` into our owned Element snapshot.
-#[inline]
-pub(crate) fn snapshot_element(el: ElementRef<'_>) -> Element {
-    let tag = el.value().name().to_string();
-    // Store only the full element HTML; derive other fields lazily to reduce
-    // per-element memory when callers only touch a subset of properties.
-    let outer_html = el.html();
-
-    Element {
-        tag,
-        outer_html,
-        inner_html: OnceLock::new(),
-        text: OnceLock::new(),
-        attrs: OnceLock::new(),
     }
 }
 

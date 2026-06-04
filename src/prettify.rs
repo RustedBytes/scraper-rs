@@ -1,9 +1,7 @@
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use scraper::{Html, element_ref::ElementRef};
 
-use crate::selectors::parse_selector;
 use crate::text::normalize_text_nodes;
+use crate::tl_dom::{TlParser, bytes_to_string, parse_owned_html_unlimited};
 
 pub(crate) fn escape_html(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len());
@@ -56,56 +54,67 @@ fn is_void_html_element(name: &str) -> bool {
     )
 }
 
-enum PrettyChild<'a> {
-    Element(ElementRef<'a>),
+enum PrettyChild {
+    Element(tl::NodeHandle),
     Text(String),
 }
 
-fn collect_pretty_children(element: ElementRef<'_>) -> Vec<PrettyChild<'_>> {
+fn collect_pretty_children(element: &tl::HTMLTag<'_>, parser: &TlParser<'_>) -> Vec<PrettyChild> {
     let mut children = Vec::new();
-    for child in element.children() {
-        if let Some(child_element) = ElementRef::wrap(child) {
-            children.push(PrettyChild::Element(child_element));
-            continue;
-        }
-
-        if let Some(text) = child.value().as_text() {
-            let normalized = normalized_text(text);
-            if !normalized.is_empty() {
-                children.push(PrettyChild::Text(normalized));
+    for child in element.children().top().iter() {
+        if let Some(child_node) = child.get(parser) {
+            match child_node {
+                tl::Node::Tag(_) => children.push(PrettyChild::Element(*child)),
+                tl::Node::Raw(text) => {
+                    let normalized = normalized_text(&bytes_to_string(text));
+                    if !normalized.is_empty() {
+                        children.push(PrettyChild::Text(normalized));
+                    }
+                }
+                tl::Node::Comment(_) => {}
             }
         }
     }
     children
 }
 
+fn raw_attr_suffix(element: &tl::HTMLTag<'_>) -> String {
+    let raw = element.raw().as_utf8_str();
+    let Some(open_end) = raw.find('>') else {
+        return String::new();
+    };
+    let open = &raw[..open_end];
+    let Some(after_name) = open.find(char::is_whitespace) else {
+        return String::new();
+    };
+    let attrs = open[after_name..].trim_end_matches('/').trim_end();
+    if attrs.is_empty() {
+        String::new()
+    } else {
+        attrs.to_string()
+    }
+}
+
 fn serialize_pretty_element_into(
     out: &mut String,
-    element: ElementRef<'_>,
+    element: &tl::HTMLTag<'_>,
+    parser: &TlParser<'_>,
     level: usize,
     indent_size: usize,
 ) {
-    let name = element.value().name();
+    let name = bytes_to_string(element.name());
     push_indent(out, level, indent_size);
     out.push('<');
-    out.push_str(name);
+    out.push_str(&name);
+    out.push_str(&raw_attr_suffix(element));
 
-    for (attr_name, attr_value) in element.value().attrs() {
-        out.push(' ');
-        out.push_str(attr_name);
-        out.push('=');
-        out.push('"');
-        out.push_str(&escape_html(attr_value));
-        out.push('"');
-    }
-
-    let children = collect_pretty_children(element);
+    let children = collect_pretty_children(element, parser);
     if children.is_empty() {
-        if is_void_html_element(name) {
+        if is_void_html_element(&name) {
             out.push('>');
         } else {
             out.push_str("></");
-            out.push_str(name);
+            out.push_str(&name);
             out.push('>');
         }
         out.push('\n');
@@ -122,7 +131,7 @@ fn serialize_pretty_element_into(
         out.push('>');
         out.push_str(&escape_html(text));
         out.push_str("</");
-        out.push_str(name);
+        out.push_str(&name);
         out.push_str(">\n");
         return;
     }
@@ -131,8 +140,17 @@ fn serialize_pretty_element_into(
 
     for child in children {
         match child {
-            PrettyChild::Element(child_element) => {
-                serialize_pretty_element_into(out, child_element, level + 1, indent_size);
+            PrettyChild::Element(child_handle) => {
+                if let Some(child_element) = child_handle.get(parser).and_then(|node| node.as_tag())
+                {
+                    serialize_pretty_element_into(
+                        out,
+                        child_element,
+                        parser,
+                        level + 1,
+                        indent_size,
+                    );
+                }
             }
             PrettyChild::Text(text) => {
                 push_indent(out, level + 1, indent_size);
@@ -144,7 +162,7 @@ fn serialize_pretty_element_into(
 
     push_indent(out, level, indent_size);
     out.push_str("</");
-    out.push_str(name);
+    out.push_str(&name);
     out.push_str(">\n");
 }
 
@@ -153,11 +171,28 @@ pub(crate) fn prettify_document_html(html: &str) -> String {
         return String::new();
     }
 
-    let parsed = Html::parse_document(html);
-    let root = parsed.root_element();
+    let Ok(parsed) = parse_owned_html_unlimited(html.to_string()) else {
+        return String::new();
+    };
+    let dom = parsed.get_ref();
+    let parser = dom.parser();
 
     let mut out = String::new();
-    serialize_pretty_element_into(&mut out, root, 0, 2);
+    for handle in dom.children() {
+        if let Some(node) = handle.get(parser) {
+            match node {
+                tl::Node::Tag(tag) => serialize_pretty_element_into(&mut out, tag, parser, 0, 2),
+                tl::Node::Raw(text) => {
+                    let normalized = normalized_text(&bytes_to_string(text));
+                    if !normalized.is_empty() {
+                        out.push_str(&escape_html(&normalized));
+                        out.push('\n');
+                    }
+                }
+                tl::Node::Comment(_) => {}
+            }
+        }
+    }
     if out.ends_with('\n') {
         out.pop();
     }
@@ -169,34 +204,27 @@ pub(crate) fn prettify_fragment_html(html: &str) -> PyResult<String> {
         return Ok(String::new());
     }
 
-    let mut wrapped =
-        String::with_capacity(html.len() + "<prettify-fragment></prettify-fragment>".len());
-    wrapped.push_str("<prettify-fragment>");
-    wrapped.push_str(html);
-    wrapped.push_str("</prettify-fragment>");
-
-    let parsed = Html::parse_document(&wrapped);
-    let selector = parse_selector("prettify-fragment")?;
-    let Some(root_wrapper) = parsed.select(selector.as_ref()).next() else {
-        return Err(PyValueError::new_err(
-            "Failed to parse HTML fragment for prettify",
-        ));
-    };
+    let parsed = parse_owned_html_unlimited(html.to_string())?;
+    let dom = parsed.get_ref();
+    let parser = dom.parser();
 
     let mut out = String::new();
-    for child in root_wrapper.children() {
-        if let Some(child_element) = ElementRef::wrap(child) {
-            serialize_pretty_element_into(&mut out, child_element, 0, 2);
-            continue;
-        }
-
-        if let Some(text) = child.value().as_text() {
-            let normalized = normalized_text(text);
-            if normalized.is_empty() {
-                continue;
+    for child in dom.children() {
+        if let Some(child_node) = child.get(parser) {
+            match child_node {
+                tl::Node::Tag(child_element) => {
+                    serialize_pretty_element_into(&mut out, child_element, parser, 0, 2);
+                }
+                tl::Node::Raw(text) => {
+                    let normalized = normalized_text(&bytes_to_string(text));
+                    if normalized.is_empty() {
+                        continue;
+                    }
+                    out.push_str(&escape_html(&normalized));
+                    out.push('\n');
+                }
+                tl::Node::Comment(_) => {}
             }
-            out.push_str(&escape_html(&normalized));
-            out.push('\n');
         }
     }
 

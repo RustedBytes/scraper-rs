@@ -303,6 +303,19 @@ def test_css_alias_and_invalid_selector(sample_html: str) -> None:
     css_links = doc.css("a[href]")
     assert [link.text for link in css_links] == ["First", "Second"]
 
+    descendant = doc.select("div[data-id='2'] a")
+    assert len(descendant) == 1
+    assert descendant[0].text == "Second"
+
+    direct_children = doc.select("div > a")
+    assert [link.attr("href") for link in direct_children] == ["/a", "/b"]
+
+    comma_matches = doc.select("a, div")
+    assert [element.tag for element in comma_matches] == ["div", "a", "div", "a"]
+
+    with pytest.raises(ValueError, match="Invalid CSS selector"):
+        doc.select("div[")
+
 
 def test_element_nested_selection(sample_html: str) -> None:
     doc = Document(sample_html)

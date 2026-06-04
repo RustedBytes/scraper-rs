@@ -2,13 +2,14 @@ use std::sync::Mutex;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use scraper::Html;
 
-use crate::element::{Element, snapshot_element};
-use crate::limits::{DEFAULT_MAX_PARSE_BYTES, ensure_within_size_limit};
+use crate::element::Element;
 use crate::prettify::prettify_document_html;
 use crate::selectors::parse_selector;
-use crate::text::normalize_text_nodes;
+use crate::tl_dom::{
+    document_text, parse_owned_html_unlimited, parse_owned_html_with_raw, select_elements_from_dom,
+    select_first_element_from_dom,
+};
 use crate::xpath::{
     XPathDocumentState, evaluate_xpath_elements, evaluate_xpath_first_element,
     parse_xpath_documents,
@@ -26,7 +27,7 @@ use crate::xpath::{
 #[pyclass(module = "scraper_rs", unsendable)]
 pub struct Document {
     raw_html: String,
-    html: Html,
+    dom: tl::VDomGuard,
     xpath_state: Mutex<Option<XPathDocumentState>>,
     closed: bool,
 }
@@ -37,16 +38,11 @@ impl Document {
         max_size_bytes: Option<usize>,
         truncate_on_limit: bool,
     ) -> PyResult<Self> {
-        let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
-        let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-
-        // Only parse with html5ever (for CSS selectors)
-        // XPath parsing will be done lazily when first needed
-        let html_parsed = Html::parse_document(html_to_parse.as_ref());
+        let (raw_html, dom) = parse_owned_html_with_raw(html, max_size_bytes, truncate_on_limit)?;
 
         Ok(Self {
-            raw_html: html_to_parse.into_owned(),
-            html: html_parsed,
+            raw_html,
+            dom,
             xpath_state: Mutex::new(None),
             closed: false,
         })
@@ -82,7 +78,8 @@ impl Document {
 
         self.raw_html.clear();
         self.raw_html.shrink_to_fit();
-        self.html = Html::parse_document("");
+        self.dom =
+            parse_owned_html_unlimited(String::new()).expect("empty HTML should parse with tl");
         // Mutex should never be poisoned here, but use expect for better error message
         *self.xpath_state.lock().expect("XPath state mutex poisoned") = None;
         self.closed = true;
@@ -132,7 +129,10 @@ impl Document {
     /// All text content from the document, normalized and joined by spaces.
     #[getter]
     pub fn text(&self) -> String {
-        normalize_text_nodes(self.html.root_element().text())
+        if self.closed {
+            return String::new();
+        }
+        document_text(self.dom.get_ref())
     }
 
     /// Return the current document HTML formatted with indentation.
@@ -156,12 +156,11 @@ impl Document {
     ///
     /// Returns an error if `css` is not a valid CSS selector.
     pub fn select(&self, css: &str) -> PyResult<Vec<Element>> {
-        let selector = parse_selector(css)?;
-        Ok(self
-            .html
-            .select(selector.as_ref())
-            .map(snapshot_element)
-            .collect::<Vec<_>>())
+        parse_selector(css)?;
+        if self.closed {
+            return Ok(Vec::new());
+        }
+        select_elements_from_dom(self.dom.get_ref(), css)
     }
 
     /// Return the first matching element, or None if nothing matches.
@@ -172,12 +171,11 @@ impl Document {
     ///
     /// Returns an error if `css` is not a valid CSS selector.
     pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
-        let selector = parse_selector(css)?;
-        Ok(self
-            .html
-            .select(selector.as_ref())
-            .next()
-            .map(snapshot_element))
+        parse_selector(css)?;
+        if self.closed {
+            return Ok(None);
+        }
+        select_first_element_from_dom(self.dom.get_ref(), css)
     }
 
     /// Return the first matching element, or None if nothing matches.

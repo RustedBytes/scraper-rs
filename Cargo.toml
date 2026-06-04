@@ -19,8 +19,6 @@ pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 rayon = "1"
 tokio = { version = "1", features = ["rt", "macros", "sync"] }
 
-scraper = { version = "0.27.0", git = "https://github.com/rust-scraper/scraper", features = ["atomic"], rev = "9c1eff304e45a8bccb463968268ce6758703e821" }
-
 xee-xpath = "0.1.5"
 rustedbytes-tl = { version = "0.2.0", features = ["std"] }
 

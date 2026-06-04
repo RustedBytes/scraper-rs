@@ -3,7 +3,6 @@ use std::rc::Rc;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use scraper::Html;
 use xee_xpath::context::StaticContextBuilder;
 use xee_xpath::query::SequenceQuery;
 use xee_xpath::{DocumentHandle, Documents, Itemable, Queries, Query};
@@ -11,6 +10,7 @@ use xee_xpath::{DocumentHandle, Documents, Itemable, Queries, Query};
 use crate::cache::FixedCache;
 use crate::element::Element;
 use crate::limits::{DEFAULT_MAX_PARSE_BYTES, ensure_within_size_limit};
+use crate::tl_dom::normalized_document_html;
 
 const XPATH_CACHE_CAPACITY: usize = 128;
 
@@ -208,7 +208,7 @@ pub(crate) fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<
 }
 
 fn normalize_xpath_document_html(html: &str) -> String {
-    Html::parse_document(html).root_element().html()
+    normalized_document_html(html)
 }
 
 pub(crate) fn evaluate_fragment_xpath_with_fallback(
