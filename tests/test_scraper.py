@@ -210,8 +210,8 @@ def test_parse_document_to_dict(sample_html: str) -> None:
     parsed = parse_document(sample_html)
 
     assert parsed["node_type"] == "document"
-    assert parsed["quirks_mode"] in {"quirks", "limited-quirks", "no-quirks"}
-    assert isinstance(parsed["errors"], list)
+    assert parsed["quirks_mode"] == "no-quirks"
+    assert parsed["errors"] == []
 
     html_node = next(
         child
@@ -256,11 +256,65 @@ def test_parse_fragment_to_dict() -> None:
     assert div_node["children"][2]["text"] == " note "
 
 
+def test_parse_tree_attrs_and_sibling_text_order() -> None:
+    parsed = parse_fragment(
+        '<input disabled id="enabled"><p>first <b>bold</b> second</p>'
+    )
+
+    input_node = next(
+        child
+        for child in parsed["children"]
+        if child["node_type"] == "element" and child["tag"] == "input"
+    )
+    assert input_node["attrs"]["disabled"] == ""
+    assert input_node["attrs"]["id"] == "enabled"
+
+    paragraph = next(
+        child
+        for child in parsed["children"]
+        if child["node_type"] == "element" and child["tag"] == "p"
+    )
+    assert [child["node_type"] for child in paragraph["children"]] == [
+        "text",
+        "element",
+        "text",
+    ]
+    assert paragraph["children"][0]["text"] == "first "
+    assert paragraph["children"][1]["tag"] == "b"
+    assert paragraph["children"][1]["children"][0]["text"] == "bold"
+    assert paragraph["children"][2]["text"] == " second"
+
+
+def test_parse_tree_helpers_respect_size_limits() -> None:
+    html = "<div>ééééé</div>"
+
+    with pytest.raises(ValueError, match="too large"):
+        parse_document(html, max_size_bytes=5)
+
+    parsed = parse_fragment(html, max_size_bytes=8, truncate_on_limit=True)
+
+    assert parsed["node_type"] == "document_fragment"
+    assert parsed["errors"] == []
+
+
 def test_css_alias_and_invalid_selector(sample_html: str) -> None:
     doc = Document(sample_html)
 
     css_links = doc.css("a[href]")
     assert [link.text for link in css_links] == ["First", "Second"]
+
+    descendant = doc.select("div[data-id='2'] a")
+    assert len(descendant) == 1
+    assert descendant[0].text == "Second"
+
+    direct_children = doc.select("div > a")
+    assert [link.attr("href") for link in direct_children] == ["/a", "/b"]
+
+    comma_matches = doc.select("a, div")
+    assert [element.tag for element in comma_matches] == ["div", "a", "div", "a"]
+
+    with pytest.raises(ValueError, match="Invalid CSS selector"):
+        doc.select("div[")
 
 
 def test_element_nested_selection(sample_html: str) -> None:

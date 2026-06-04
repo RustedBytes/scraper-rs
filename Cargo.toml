@@ -1,6 +1,6 @@
 [package]
 name = "scraper-rs"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2024"
 
 [lib]
@@ -19,13 +19,11 @@ pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 rayon = "1"
 tokio = { version = "1", features = ["rt", "macros", "sync"] }
 
-scraper = { version = "0.27.0", git = "https://github.com/rust-scraper/scraper", features = ["atomic"], rev = "9c1eff304e45a8bccb463968268ce6758703e821" }
-
 xee-xpath = "0.1.5"
-html5ever = "0.39.0"
+rustedbytes-tl = { version = "0.2.0", features = ["std"] }
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [build-dependencies]
@@ -34,11 +32,6 @@ pyo3-build-config = { version = "0.28.3", features = ["resolve-config"] }
 [[bench]]
 name = "sync_async"
 path = "benchmarks/sync_async.rs"
-harness = false
-
-[[bench]]
-name = "parser_comparison"
-path = "benchmarks/parser_comparison.rs"
 harness = false
 
 [[bench]]

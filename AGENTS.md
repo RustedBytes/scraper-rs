@@ -4,7 +4,7 @@ This file contains essential information for Large Language Models (LLMs) to eff
 
 ## Project Overview
 
-**scraper-rs** is a Python library providing high-performance HTML parsing and CSS/XPath selection through Python bindings to the Rust `scraper` crate. It uses PyO3 to create Python bindings for Rust code, offering zero Python-side parsing overhead.
+**scraper-rs** is a Python library providing high-performance HTML parsing and CSS/XPath selection through Python bindings to Rust HTML tooling. It uses PyO3 to create Python bindings for Rust code, offering zero Python-side parsing overhead.
 
 - **Repository**: https://github.com/RustedBytes/scraper-rs
 - **Package Name**: `scraper-rust` (PyPI)
@@ -17,9 +17,8 @@ This file contains essential information for Large Language Models (LLMs) to eff
 
 ### Core Technologies
 - **Rust** (2024 edition)
-  - `scraper` v0.27.0 from `rust-scraper/scraper` with the `atomic` feature - HTML parsing and CSS selection
   - `xee-xpath` v0.1.5 - XPath support
-  - `html5ever` v0.39.0 - parse-tree dictionary helpers
+  - `rustedbytes-tl` v0.2.0 with `std` feature - HTML parsing, CSS selection, and parse-tree dictionary helpers
   - `pyo3` v0.28.3 with `abi3-py310`; the `extension-module` feature is enabled through the package build config
   - `pyo3-async-runtimes` v0.28 with `tokio-runtime` feature
   - `tokio` v1 (rt, macros) for async wrappers
@@ -308,9 +307,8 @@ See `.github/workflows/release.yml` and `.github/workflows/bump-version.yml`
 - `pyo3 = { version = "0.28.3", features = ["abi3-py310"] }`
 - `pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }`
 - `tokio = { version = "1", features = ["rt", "macros"] }`
-- `scraper = { version = "0.27.0", git = "https://github.com/rust-scraper/scraper", features = ["atomic"], rev = "9c1eff304e45a8bccb463968268ce6758703e821" }`
 - `xee-xpath = "0.1.5"`
-- `html5ever = "0.39.0"`
+- `rustedbytes-tl = { version = "0.2.0", features = ["std"] }`
 
 ### Python Dependencies (pyproject.toml)
 **Runtime**: None (self-contained binary wheel)
@@ -339,7 +337,7 @@ See `.github/workflows/release.yml` and `.github/workflows/bump-version.yml`
 ## Resources
 
 - **PyO3 Documentation**: https://pyo3.rs/
-- **scraper crate**: https://docs.rs/scraper/
+- **rustedbytes-tl crate**: https://crates.io/crates/rustedbytes-tl
 - **Maturin Guide**: https://www.maturin.rs/
 - **Project README**: `README.md`
 - **Example Usage**: `examples/demo.py`

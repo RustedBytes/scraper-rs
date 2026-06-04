@@ -9,6 +9,7 @@ mod prettify;
 mod runtime;
 mod selectors;
 mod text;
+mod tl_dom;
 mod xpath;
 
 use pyo3::prelude::*;

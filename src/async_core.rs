@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use scraper::Html;
 
 use crate::element::Element;
 use crate::limits::{DEFAULT_MAX_PARSE_BYTES, ensure_within_size_limit};
@@ -13,9 +13,10 @@ use crate::selectors::{
     select_first_with_limit, select_fragment, select_fragment_first, select_with_limit,
 };
 use crate::text::{
-    attrs_from_element_html, inner_html_from_element_html, normalize_text_nodes,
-    text_from_element_html, truncate_for_repr,
+    attrs_from_element_html, inner_html_from_element_html, text_from_element_html,
+    truncate_for_repr,
 };
+use crate::tl_dom::document_text;
 use crate::xpath::{
     evaluate_fragment_xpath, evaluate_fragment_xpath_first, xpath_first_with_limit,
     xpath_with_limit,
@@ -195,8 +196,11 @@ impl AsyncDocumentCore {
         let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
         let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
         let raw_html = html_to_parse.into_owned();
-        let parsed = Html::parse_document(&raw_html);
-        let text = normalize_text_nodes(parsed.root_element().text());
+        let text = {
+            let parsed = tl::parse(&raw_html, tl::ParserOptions::default())
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+            document_text(&parsed)
+        };
         Ok(Self::new(raw_html, text))
     }
 }

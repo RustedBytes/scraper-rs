@@ -1,4 +1,4 @@
-"""scraper_rs - Python bindings for the Rust scraper crate."""
+"""scraper_rs - Python bindings for Rust HTML parsing and selection."""
 
 from . import scraper_rs as _scraper_rs
 

@@ -4,7 +4,7 @@
 [![Tests](https://github.com/RustedBytes/scraper-rs/actions/workflows/tests.yml/badge.svg)](https://github.com/RustedBytes/scraper-rs/actions/workflows/tests.yml)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/scraper-rust?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scraper-rust)
 
-Python bindings for the Rust [**scraper**](https://github.com/rust-scraper/scraper) crate via PyO3. It provides a lightweight `Document`/`Element` API with CSS selectors, XPath (via `xee-xpath`), handy helpers, and zero Python-side parsing work.
+Python bindings for high-performance Rust HTML parsing via PyO3. It provides a lightweight `Document`/`Element` API with CSS selectors backed by `rustedbytes-tl`, XPath (via `xee-xpath`), handy helpers, and zero Python-side parsing work.
 
 ## Quick start
 
@@ -115,7 +115,8 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
 - Elements also expose `.prettify()` to format element HTML with indentation.
 - Top-level helpers mirror the class methods: `parse(html)`, `prettify(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
-- Parse-tree helpers `parse_document(html)` and `parse_fragment(html)` return html5ever-style dictionaries for callers that need structural node data.
+- Parse-tree helpers `parse_document(html)` and `parse_fragment(html)` return `rustedbytes-tl` backed structural dictionaries for callers that need node data.
+- CSS selection uses the native `rustedbytes-tl` selector subset: tag, id, class, `*`, attribute selectors, comma selectors, descendants, and direct children.
 - `max_size_bytes` lets you fail fast on oversized HTML; defaults to a 1 GiB limit.
 - `truncate_on_limit` allows parsing a truncated version (limited to `max_size_bytes`) of oversized HTML instead of raising an error.
 - Call `doc.close()` (or `with Document(html) as doc: ...`) to free parsed DOM resources when you're done.
