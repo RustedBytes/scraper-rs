@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::tl_dom::{attrs_to_map, node_text, parse_owned_html_unlimited, tag_inner_html};
 
 /// Tiny helper to truncate text in __repr__.
+#[inline]
 pub(crate) fn truncate_for_repr(s: &str, max_chars: usize) -> String {
     let mut out = String::new();
     for (i, ch) in s.chars().enumerate() {
@@ -39,6 +40,7 @@ where
     out
 }
 
+#[inline]
 pub(crate) fn inner_html_from_element_html(element_html: &str) -> String {
     parse_owned_html_unlimited(element_html.to_string())
         .ok()
@@ -54,6 +56,7 @@ pub(crate) fn inner_html_from_element_html(element_html: &str) -> String {
         .unwrap_or_default()
 }
 
+#[inline]
 pub(crate) fn text_from_element_html(element_html: &str) -> String {
     parse_owned_html_unlimited(element_html.to_string())
         .ok()
@@ -69,6 +72,7 @@ pub(crate) fn text_from_element_html(element_html: &str) -> String {
         .unwrap_or_default()
 }
 
+#[inline]
 pub(crate) fn attrs_from_element_html(element_html: &str) -> HashMap<String, String> {
     parse_owned_html_unlimited(element_html.to_string())
         .ok()

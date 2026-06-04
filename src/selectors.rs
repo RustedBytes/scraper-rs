@@ -18,6 +18,7 @@ thread_local! {
         RefCell::new(FixedCache::new(SELECTOR_CACHE_CAPACITY));
 }
 
+#[inline]
 pub(crate) fn parse_selector(css: &str) -> PyResult<Arc<str>> {
     SELECTOR_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
@@ -33,18 +34,21 @@ pub(crate) fn parse_selector(css: &str) -> PyResult<Arc<str>> {
     })
 }
 
+#[inline]
 pub(crate) fn select_fragment(html: &str, css: &str) -> PyResult<Vec<Element>> {
     parse_selector(css)?;
     let fragment = parse_owned_html_unlimited(html.to_string())?;
     select_elements_from_dom(fragment.get_ref(), css)
 }
 
+#[inline]
 pub(crate) fn select_fragment_first(html: &str, css: &str) -> PyResult<Option<Element>> {
     parse_selector(css)?;
     let fragment = parse_owned_html_unlimited(html.to_string())?;
     select_first_element_from_dom(fragment.get_ref(), css)
 }
 
+#[inline]
 pub(crate) fn select_with_limit(
     html: &str,
     css: &str,
@@ -59,6 +63,7 @@ pub(crate) fn select_with_limit(
     select_elements_from_dom(parsed.get_ref(), css)
 }
 
+#[inline]
 pub(crate) fn select_first_with_limit(
     html: &str,
     css: &str,

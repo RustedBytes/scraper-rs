@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 use crate::text::normalize_text_nodes;
 use crate::tl_dom::{TlParser, bytes_to_string, parse_owned_html_unlimited};
 
+#[inline]
 pub(crate) fn escape_html(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len());
     for ch in value.chars() {
@@ -18,6 +19,7 @@ pub(crate) fn escape_html(value: &str) -> String {
     escaped
 }
 
+#[inline]
 fn push_indent(out: &mut String, level: usize, indent_size: usize) {
     let spaces = level.saturating_mul(indent_size);
     out.reserve(spaces);
@@ -26,14 +28,17 @@ fn push_indent(out: &mut String, level: usize, indent_size: usize) {
     }
 }
 
+#[inline]
 fn has_visible_text(text: &str) -> bool {
     text.split_whitespace().next().is_some()
 }
 
+#[inline]
 fn normalized_text(text: &str) -> String {
     normalize_text_nodes(std::iter::once(text))
 }
 
+#[inline]
 fn is_void_html_element(name: &str) -> bool {
     matches!(
         name,
@@ -78,6 +83,7 @@ fn collect_pretty_children(element: &tl::HTMLTag<'_>, parser: &TlParser<'_>) -> 
     children
 }
 
+#[inline]
 fn raw_attr_suffix(element: &tl::HTMLTag<'_>) -> String {
     let raw = element.raw().as_utf8_str();
     let Some(open_end) = raw.find('>') else {

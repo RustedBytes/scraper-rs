@@ -11,6 +11,7 @@ use crate::text::normalize_text_nodes;
 
 pub(crate) type TlParser<'a> = Parser<'a, 32, 0, 0, 16, 16, 0>;
 
+#[inline]
 pub(crate) fn parse_owned_html_with_raw(
     html: &str,
     max_size_bytes: Option<usize>,
@@ -23,16 +24,19 @@ pub(crate) fn parse_owned_html_with_raw(
     Ok((raw_html, dom))
 }
 
+#[inline]
 pub(crate) fn parse_owned_html_unlimited(html: String) -> PyResult<VDomGuard> {
     // SAFETY: VDomGuard owns the input String and keeps it alive for the borrowed VDom.
     unsafe { tl::parse_owned(html, tl::ParserOptions::default()) }
         .map_err(|err| PyValueError::new_err(err.to_string()))
 }
 
+#[inline]
 pub(crate) fn bytes_to_string(bytes: &tl::Bytes<'_>) -> String {
     bytes.as_utf8_str().into_owned()
 }
 
+#[inline]
 pub(crate) fn attrs_to_map(tag: &tl::HTMLTag<'_>) -> HashMap<String, String> {
     tag.attributes()
         .iter()
@@ -40,6 +44,7 @@ pub(crate) fn attrs_to_map(tag: &tl::HTMLTag<'_>) -> HashMap<String, String> {
         .collect()
 }
 
+#[inline]
 pub(crate) fn node_outer_html(node: &Node<'_>, parser: &TlParser<'_>) -> String {
     if let Some(tag) = node.as_tag() {
         return tag.raw().as_utf8_str().into_owned();
@@ -50,14 +55,17 @@ pub(crate) fn node_outer_html(node: &Node<'_>, parser: &TlParser<'_>) -> String 
     out
 }
 
+#[inline]
 pub(crate) fn tag_inner_html(tag: &tl::HTMLTag<'_>, parser: &TlParser<'_>) -> String {
     tag.inner_html(parser)
 }
 
+#[inline]
 pub(crate) fn node_text(node: &Node<'_>, parser: &TlParser<'_>) -> String {
     normalize_text_nodes(std::iter::once(node.inner_text(parser).as_ref()))
 }
 
+#[inline]
 pub(crate) fn document_text(dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>) -> String {
     let parser = dom.parser();
     normalize_text_nodes(
@@ -71,6 +79,7 @@ pub(crate) fn document_text(dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>) -> String {
     )
 }
 
+#[inline]
 pub(crate) fn snapshot_node(node: &Node<'_>, parser: &TlParser<'_>) -> Option<Element> {
     let tag = node.as_tag()?;
     Some(Element::from_parts(
@@ -197,6 +206,7 @@ pub(crate) fn select_elements_from_dom(
         .collect())
 }
 
+#[inline]
 pub(crate) fn select_first_element_from_dom(
     dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>,
     css: &str,
@@ -204,6 +214,7 @@ pub(crate) fn select_first_element_from_dom(
     Ok(select_elements_from_dom(dom, css)?.into_iter().next())
 }
 
+#[inline]
 pub(crate) fn normalized_document_html(html: &str) -> String {
     parse_owned_html_unlimited(html.to_string())
         .map(|dom| dom.get_ref().outer_html())
