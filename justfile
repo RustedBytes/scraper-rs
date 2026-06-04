@@ -31,6 +31,9 @@ install-wheel: build
 test:
     uv run pytest tests/
 
+bench:
+    cargo bench
+
 fmt:
     cargo fmt --all
     uv run ruff format

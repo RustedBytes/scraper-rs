@@ -15,13 +15,14 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
 use async_core::{AsyncDocumentCore, AsyncElementCore};
-use document::Document;
-use element::Element;
 use functions::{
     first, first_async, parse, parse_async, parse_document_dict, parse_fragment_dict,
     prettify_async, select, select_async, select_first, select_first_async, xpath_async,
     xpath_first, xpath_first_async,
 };
+
+pub use document::Document;
+pub use element::Element;
 
 /// Top-level module initializer.
 #[pymodule(gil_used = false)]
