@@ -3,32 +3,59 @@ use std::collections::HashMap;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use tl::queryselector::Selector;
-use tl::{Node, NodeHandle, Parser, VDomGuard};
+use tl::{Node, NodeHandle, Parser, VDom};
 
 use crate::element::Element;
 use crate::limits::{DEFAULT_MAX_PARSE_BYTES, ensure_within_size_limit};
 use crate::text::normalize_text_nodes;
 
 pub(crate) type TlParser<'a> = Parser<'a, 32, 0, 0, 16, 16, 0>;
+pub(crate) type TlVDom<'a> = VDom<'a, 32, 0, 0, 16, 16, 0>;
+
+pub(crate) struct OwnedTlDom {
+    dom: TlVDom<'static>,
+    html: Box<str>,
+}
+
+impl OwnedTlDom {
+    #[inline]
+    pub(crate) fn parse(html: String) -> PyResult<Self> {
+        let html = html.into_boxed_str();
+        let html_ptr: *const str = &*html;
+        // SAFETY: `html` is heap allocated and stored in the returned struct.
+        // The DOM is dropped before `html` because fields are dropped in declaration order.
+        let html_ref: &'static str = unsafe { &*html_ptr };
+        let dom = tl::parse(html_ref, tl::ParserOptions::default())
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+
+        Ok(Self { dom, html })
+    }
+
+    #[inline]
+    pub(crate) fn get_ref(&self) -> &TlVDom<'static> {
+        &self.dom
+    }
+
+    #[inline]
+    pub(crate) fn html(&self) -> &str {
+        &self.html
+    }
+}
 
 #[inline]
 pub(crate) fn parse_owned_html_with_raw(
     html: &str,
     max_size_bytes: Option<usize>,
     truncate_on_limit: bool,
-) -> PyResult<(String, VDomGuard)> {
+) -> PyResult<OwnedTlDom> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-    let raw_html = html_to_parse.into_owned();
-    let dom = parse_owned_html_unlimited(raw_html.clone())?;
-    Ok((raw_html, dom))
+    parse_owned_html_unlimited(html_to_parse.into_owned())
 }
 
 #[inline]
-pub(crate) fn parse_owned_html_unlimited(html: String) -> PyResult<VDomGuard> {
-    // SAFETY: VDomGuard owns the input String and keeps it alive for the borrowed VDom.
-    unsafe { tl::parse_owned(html, tl::ParserOptions::default()) }
-        .map_err(|err| PyValueError::new_err(err.to_string()))
+pub(crate) fn parse_owned_html_unlimited(html: String) -> PyResult<OwnedTlDom> {
+    OwnedTlDom::parse(html)
 }
 
 #[inline]

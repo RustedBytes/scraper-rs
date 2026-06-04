@@ -6,8 +6,8 @@ use pyo3::prelude::*;
 use crate::element::Element;
 use crate::prettify::prettify_document_html;
 use crate::tl_dom::{
-    document_text, parse_owned_html_unlimited, parse_owned_html_with_raw, select_elements_from_dom,
-    select_first_element_from_dom,
+    OwnedTlDom, document_text, parse_owned_html_unlimited, parse_owned_html_with_raw,
+    select_elements_from_dom, select_first_element_from_dom,
 };
 use crate::xpath::{
     XPathDocumentState, evaluate_xpath_elements, evaluate_xpath_first_element,
@@ -25,8 +25,7 @@ use crate::xpath::{
 ///     print(a.text, a.attr("href"))
 #[pyclass(module = "scraper_rs", unsendable)]
 pub struct Document {
-    raw_html: String,
-    dom: tl::VDomGuard,
+    dom: OwnedTlDom,
     xpath_state: Mutex<Option<XPathDocumentState>>,
     closed: bool,
 }
@@ -37,10 +36,9 @@ impl Document {
         max_size_bytes: Option<usize>,
         truncate_on_limit: bool,
     ) -> PyResult<Self> {
-        let (raw_html, dom) = parse_owned_html_with_raw(html, max_size_bytes, truncate_on_limit)?;
+        let dom = parse_owned_html_with_raw(html, max_size_bytes, truncate_on_limit)?;
 
         Ok(Self {
-            raw_html,
             dom,
             xpath_state: Mutex::new(None),
             closed: false,
@@ -59,7 +57,7 @@ impl Document {
         // Check if already initialized
         if state_lock.is_none() {
             let (documents, document_handle) =
-                parse_xpath_documents(&self.raw_html, "HTML document")?;
+                parse_xpath_documents(self.dom.html(), "HTML document")?;
             *state_lock = Some(XPathDocumentState {
                 documents,
                 document_handle,
@@ -75,8 +73,6 @@ impl Document {
             return;
         }
 
-        self.raw_html.clear();
-        self.raw_html.shrink_to_fit();
         self.dom =
             parse_owned_html_unlimited(String::new()).expect("empty HTML should parse with tl");
         // Mutex should never be poisoned here, but use expect for better error message
@@ -122,7 +118,7 @@ impl Document {
     /// Return the original HTML string.
     #[getter]
     pub fn html(&self) -> &str {
-        &self.raw_html
+        self.dom.html()
     }
 
     /// All text content from the document, normalized and joined by spaces.
@@ -140,7 +136,7 @@ impl Document {
     ///
     /// This currently does not return errors, but the `PyResult` is preserved for API consistency.
     pub fn prettify(&self) -> PyResult<String> {
-        Ok(prettify_document_html(&self.raw_html))
+        Ok(prettify_document_html(self.dom.html()))
     }
 
     /// Select all elements matching the given CSS selector.
@@ -258,7 +254,7 @@ impl Document {
     }
 
     pub(crate) fn __repr__(&self) -> String {
-        let len = self.raw_html.len();
+        let len = self.dom.html().len();
         format!("<Document len_html={len}>")
     }
 }
