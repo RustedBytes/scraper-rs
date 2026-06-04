@@ -20,7 +20,7 @@ tokio = { version = "1", features = ["rt", "macros", "sync"] }
 scraper = { version = "0.27.0", git = "https://github.com/rust-scraper/scraper", features = ["atomic"], rev = "9c1eff304e45a8bccb463968268ce6758703e821" }
 
 xee-xpath = "0.1.5"
-html5ever = "0.39.0"
+rustedbytes-tl = { version = "0.2.0", features = ["std"] }
 
 [profile.release]
 lto = "fat"

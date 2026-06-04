@@ -19,7 +19,8 @@ This file contains essential information for Large Language Models (LLMs) to eff
 - **Rust** (2024 edition)
   - `scraper` v0.27.0 from `rust-scraper/scraper` with the `atomic` feature - HTML parsing and CSS selection
   - `xee-xpath` v0.1.5 - XPath support
-  - `html5ever` v0.39.0 - parse-tree dictionary helpers
+  - `rustedbytes-tl` v0.2.0 with `std` feature - parse-tree dictionary helpers
+  - `html5ever` may still be present transitively through the Rust `scraper` crate
   - `pyo3` v0.28.3 with `abi3-py310`; the `extension-module` feature is enabled through the package build config
   - `pyo3-async-runtimes` v0.28 with `tokio-runtime` feature
   - `tokio` v1 (rt, macros) for async wrappers
@@ -310,7 +311,7 @@ See `.github/workflows/release.yml` and `.github/workflows/bump-version.yml`
 - `tokio = { version = "1", features = ["rt", "macros"] }`
 - `scraper = { version = "0.27.0", git = "https://github.com/rust-scraper/scraper", features = ["atomic"], rev = "9c1eff304e45a8bccb463968268ce6758703e821" }`
 - `xee-xpath = "0.1.5"`
-- `html5ever = "0.39.0"`
+- `rustedbytes-tl = { version = "0.2.0", features = ["std"] }`
 
 ### Python Dependencies (pyproject.toml)
 **Runtime**: None (self-contained binary wheel)

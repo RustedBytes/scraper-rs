@@ -378,7 +378,7 @@ Summary
 ==========================================================================================
 
 This benchmark compares scraper-rs (after optimizations) with markupever.
-Both libraries are based on html5ever for HTML parsing.
+scraper-rs still uses the Rust `scraper` crate for CSS-facing HTML parsing, which may depend on html5ever internally; its parse-tree dictionary helpers are backed by rustedbytes-tl.
 
 Key observations:
 - scraper-rs now has lazy XPath parsing (only parsed when needed)

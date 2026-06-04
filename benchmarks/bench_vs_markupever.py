@@ -259,7 +259,7 @@ def main() -> None:
     print("=" * 90)
     print()
     print("This benchmark compares scraper-rs (after optimizations) with markupever.")
-    print("Both libraries are based on html5ever for HTML parsing.")
+    print("scraper-rs uses scraper for CSS-facing parsing and rustedbytes-tl for parse-tree helpers.")
     print()
     print("Key observations:")
     print("- scraper-rs now has lazy XPath parsing (only parsed when needed)")

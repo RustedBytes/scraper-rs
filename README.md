@@ -115,7 +115,7 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - Elements support nested CSS and XPath selection via `.select(css)`, `.select_first(css)`, `.find(css)`, `.css(css)`, `.xpath(expr)`, `.xpath_first(expr)`.
 - Elements also expose `.prettify()` to format element HTML with indentation.
 - Top-level helpers mirror the class methods: `parse(html)`, `prettify(html)`, `select(html, css)`, `select_first(html, css)` / `first(html, css)`, `xpath(html, expr)`, `xpath_first(html, expr)`.
-- Parse-tree helpers `parse_document(html)` and `parse_fragment(html)` return html5ever-style dictionaries for callers that need structural node data.
+- Parse-tree helpers `parse_document(html)` and `parse_fragment(html)` return tl-backed structural dictionaries for callers that need node data. CSS selection still uses the Rust `scraper` crate, which may depend on html5ever internally.
 - `max_size_bytes` lets you fail fast on oversized HTML; defaults to a 1 GiB limit.
 - `truncate_on_limit` allows parsing a truncated version (limited to `max_size_bytes`) of oversized HTML instead of raising an error.
 - Call `doc.close()` (or `with Document(html) as doc: ...`) to free parsed DOM resources when you're done.
