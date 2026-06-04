@@ -25,7 +25,7 @@ xee-xpath = "0.1.5"
 rustedbytes-tl = { version = "0.2.0", features = ["std"] }
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [build-dependencies]
