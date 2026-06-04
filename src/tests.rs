@@ -1,7 +1,7 @@
 use super::*;
 use std::borrow::Cow;
 use std::rc::Rc;
-use std::sync::{Arc, Once};
+use std::sync::Once;
 
 use pyo3::types::PyModule;
 use pyo3::{Py, Python};
@@ -10,7 +10,7 @@ use crate::cache::FixedCache;
 use crate::functions::{first, parse, prettify, select, select_first, xpath, xpath_first};
 use crate::limits::ensure_within_size_limit;
 use crate::prettify::{escape_html, prettify_document_html, prettify_fragment_html};
-use crate::selectors::{parse_selector, select_fragment, select_fragment_first, select_with_limit};
+use crate::selectors::{select_fragment, select_fragment_first, select_with_limit};
 use crate::text::{
     attrs_from_element_html, inner_html_from_element_html, normalize_text_nodes,
     text_from_element_html, truncate_for_repr,
@@ -107,16 +107,11 @@ fn extractors_return_expected_element_parts() {
 }
 
 #[test]
-fn parse_selector_reuses_cached_instances() {
-    let first = parse_selector("div.item").unwrap();
-    let second = parse_selector("div.item").unwrap();
-    assert!(Arc::ptr_eq(&first, &second));
-}
-
-#[test]
-fn parse_selector_reports_invalid_css() {
-    let err = parse_selector("div[").unwrap_err();
-    let message = err.to_string();
+fn select_fragment_reports_invalid_css() {
+    let message = match select_fragment("<div></div>", "div[") {
+        Ok(_) => panic!("expected invalid selector to fail"),
+        Err(err) => err.to_string(),
+    };
     assert!(message.contains("Invalid CSS selector"));
 }
 

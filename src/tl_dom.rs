@@ -88,6 +88,63 @@ pub(crate) fn snapshot_node(node: &Node<'_>, parser: &TlParser<'_>) -> Option<El
     ))
 }
 
+fn ancestor_matches(
+    selector: &Selector<'_>,
+    ancestors: &[NodeHandle],
+    parser: &TlParser<'_>,
+) -> bool {
+    ancestors.iter().enumerate().any(|(idx, handle)| {
+        handle.get(parser).is_some_and(|ancestor| {
+            selector_matches_node(selector, ancestor, &ancestors[..idx], parser)
+        })
+    })
+}
+
+fn ancestor_matches_all(
+    left: &Selector<'_>,
+    right: &Selector<'_>,
+    ancestors: &[NodeHandle],
+    parser: &TlParser<'_>,
+) -> bool {
+    ancestors.iter().enumerate().any(|(idx, handle)| {
+        handle.get(parser).is_some_and(|ancestor| {
+            let ancestor_ancestors = &ancestors[..idx];
+            selector_matches_node(left, ancestor, ancestor_ancestors, parser)
+                && selector_matches_node(right, ancestor, ancestor_ancestors, parser)
+        })
+    })
+}
+
+fn parent_matches(
+    selector: &Selector<'_>,
+    ancestors: &[NodeHandle],
+    parser: &TlParser<'_>,
+) -> bool {
+    ancestors
+        .last()
+        .and_then(|handle| handle.get(parser))
+        .is_some_and(|parent| {
+            let parent_ancestors = &ancestors[..ancestors.len().saturating_sub(1)];
+            selector_matches_node(selector, parent, parent_ancestors, parser)
+        })
+}
+
+fn parent_matches_all(
+    left: &Selector<'_>,
+    right: &Selector<'_>,
+    ancestors: &[NodeHandle],
+    parser: &TlParser<'_>,
+) -> bool {
+    ancestors
+        .last()
+        .and_then(|handle| handle.get(parser))
+        .is_some_and(|parent| {
+            let parent_ancestors = &ancestors[..ancestors.len().saturating_sub(1)];
+            selector_matches_node(left, parent, parent_ancestors, parser)
+                && selector_matches_node(right, parent, parent_ancestors, parser)
+        })
+}
+
 fn selector_matches_node(
     selector: &Selector<'_>,
     node: &Node<'_>,
@@ -102,34 +159,12 @@ fn selector_matches_node(
         Selector::And(left, right) => {
             if let Selector::Descendant(right_left, right_right) = right.as_ref() {
                 return selector_matches_node(right_right, node, ancestors, parser)
-                    && ancestors.iter().enumerate().any(|(idx, handle)| {
-                        handle.get(parser).is_some_and(|ancestor| {
-                            selector_matches_node(left, ancestor, &ancestors[..idx], parser)
-                                && selector_matches_node(
-                                    right_left,
-                                    ancestor,
-                                    &ancestors[..idx],
-                                    parser,
-                                )
-                        })
-                    });
+                    && ancestor_matches_all(left, right_left, ancestors, parser);
             }
 
             if let Selector::Parent(right_left, right_right) = right.as_ref() {
                 return selector_matches_node(right_right, node, ancestors, parser)
-                    && ancestors
-                        .last()
-                        .and_then(|handle| handle.get(parser))
-                        .is_some_and(|parent| {
-                            let parent_ancestors = &ancestors[..ancestors.len().saturating_sub(1)];
-                            selector_matches_node(left, parent, parent_ancestors, parser)
-                                && selector_matches_node(
-                                    right_left,
-                                    parent,
-                                    parent_ancestors,
-                                    parser,
-                                )
-                        });
+                    && parent_matches_all(left, right_left, ancestors, parser);
             }
 
             selector_matches_node(left, node, ancestors, parser)
@@ -141,21 +176,11 @@ fn selector_matches_node(
         }
         Selector::Descendant(left, right) => {
             selector_matches_node(right, node, ancestors, parser)
-                && ancestors.iter().enumerate().any(|(idx, handle)| {
-                    handle.get(parser).is_some_and(|ancestor| {
-                        selector_matches_node(left, ancestor, &ancestors[..idx], parser)
-                    })
-                })
+                && ancestor_matches(left, ancestors, parser)
         }
         Selector::Parent(left, right) => {
             selector_matches_node(right, node, ancestors, parser)
-                && ancestors
-                    .last()
-                    .and_then(|handle| handle.get(parser))
-                    .is_some_and(|parent| {
-                        let parent_ancestors = &ancestors[..ancestors.len().saturating_sub(1)];
-                        selector_matches_node(left, parent, parent_ancestors, parser)
-                    })
+                && parent_matches(left, ancestors, parser)
         }
         _ => selector.matches(node),
     }

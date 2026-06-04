@@ -1,43 +1,10 @@
-#[cfg(test)]
-use std::{cell::RefCell, sync::Arc};
-
-#[cfg(test)]
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-#[cfg(test)]
-use crate::cache::FixedCache;
 use crate::element::Element;
 use crate::limits::{DEFAULT_MAX_PARSE_BYTES, ensure_within_size_limit};
 use crate::tl_dom::{
     parse_owned_html_unlimited, select_elements_from_dom, select_first_element_from_dom,
 };
-
-#[cfg(test)]
-const SELECTOR_CACHE_CAPACITY: usize = 256;
-
-#[cfg(test)]
-thread_local! {
-    static SELECTOR_CACHE: RefCell<FixedCache<Arc<str>>> =
-        RefCell::new(FixedCache::new(SELECTOR_CACHE_CAPACITY));
-}
-
-#[cfg(test)]
-#[inline]
-pub(crate) fn parse_selector(css: &str) -> PyResult<Arc<str>> {
-    SELECTOR_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(selector) = cache.get(css) {
-            return Ok(selector.clone());
-        }
-
-        tl::parse_query_selector(css)
-            .ok_or_else(|| PyValueError::new_err(format!("Invalid CSS selector {css:?}")))?;
-        let css = Arc::<str>::from(css);
-        cache.insert(css.to_string(), css.clone());
-        Ok(css)
-    })
-}
 
 #[inline]
 pub(crate) fn select_fragment(html: &str, css: &str) -> PyResult<Vec<Element>> {
