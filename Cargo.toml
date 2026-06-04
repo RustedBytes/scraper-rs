@@ -28,6 +28,9 @@ html5ever = "0.39.0"
 criterion = { version = "0.7", features = ["async_tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
+[build-dependencies]
+pyo3-build-config = { version = "0.28.3", features = ["resolve-config"] }
+
 [[bench]]
 name = "sync_async"
 path = "benchmarks/sync_async.rs"

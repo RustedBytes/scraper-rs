@@ -2079,6 +2079,7 @@ dependencies = [
  "html5ever",
  "pyo3",
  "pyo3-async-runtimes",
+ "pyo3-build-config",
  "rayon",
  "scraper",
  "tokio",
