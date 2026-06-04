@@ -1,7 +1,5 @@
 # Benchmarks
 
-This directory contains Rust Criterion benchmarks for measuring scraper-rs core performance without Python interpreter overhead.
-
 ## Running Benchmarks
 
 Run the full benchmark suite:
@@ -38,18 +36,6 @@ Operations benchmarked:
 
 Inputs are small, medium, and large deterministic HTML documents.
 
-### parser_comparison.rs
-
-Compares scraper-rs owned `Document`/`Element` behavior with the underlying Rust `scraper` crate baseline.
-
-Operations benchmarked:
-
-- document parse
-- CSS select
-- CSS select first
-
-The old Python benchmark compared against `markupever`; that library is Python-only, so it is not part of the Rust Criterion suite.
-
 ### parse_scaling.rs
 
 Measures parse throughput across progressively larger deterministic HTML inputs:
@@ -62,8 +48,7 @@ Measures parse throughput across progressively larger deterministic HTML inputs:
 - 2 MiB
 - 8 MiB
 
-Criterion does not measure RSS directly. This target replaces the old Python memory benchmark with stable parse-throughput scaling over the same style of generated documents.
-
 ## Interpreting Results
 
-Use `parser_comparison` to understand wrapper overhead relative to the raw Rust parser. Use `sync_async` to estimate scheduling cost when work is routed through a blocking async task. Use `parse_scaling` to watch parser throughput as input size grows.
+- Use `sync_async` to estimate scheduling cost when work is routed through a blocking async task. 
+- Use `parse_scaling` to watch parser throughput as input size grows.

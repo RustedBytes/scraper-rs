@@ -37,11 +37,6 @@ path = "benchmarks/sync_async.rs"
 harness = false
 
 [[bench]]
-name = "parser_comparison"
-path = "benchmarks/parser_comparison.rs"
-harness = false
-
-[[bench]]
 name = "parse_scaling"
 path = "benchmarks/parse_scaling.rs"
 harness = false
