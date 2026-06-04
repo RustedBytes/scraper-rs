@@ -2085,7 +2085,6 @@ name = "scraper-rs"
 version = "0.5.1"
 dependencies = [
  "criterion",
- "html5ever",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-build-config",
