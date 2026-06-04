@@ -1,9 +1,11 @@
-use std::cell::RefCell;
-use std::sync::Arc;
+#[cfg(test)]
+use std::{cell::RefCell, sync::Arc};
 
+#[cfg(test)]
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+#[cfg(test)]
 use crate::cache::FixedCache;
 use crate::element::Element;
 use crate::limits::{DEFAULT_MAX_PARSE_BYTES, ensure_within_size_limit};
@@ -11,13 +13,16 @@ use crate::tl_dom::{
     parse_owned_html_unlimited, select_elements_from_dom, select_first_element_from_dom,
 };
 
+#[cfg(test)]
 const SELECTOR_CACHE_CAPACITY: usize = 256;
 
+#[cfg(test)]
 thread_local! {
     static SELECTOR_CACHE: RefCell<FixedCache<Arc<str>>> =
         RefCell::new(FixedCache::new(SELECTOR_CACHE_CAPACITY));
 }
 
+#[cfg(test)]
 #[inline]
 pub(crate) fn parse_selector(css: &str) -> PyResult<Arc<str>> {
     SELECTOR_CACHE.with(|cache| {
@@ -36,14 +41,12 @@ pub(crate) fn parse_selector(css: &str) -> PyResult<Arc<str>> {
 
 #[inline]
 pub(crate) fn select_fragment(html: &str, css: &str) -> PyResult<Vec<Element>> {
-    parse_selector(css)?;
     let fragment = parse_owned_html_unlimited(html.to_string())?;
     select_elements_from_dom(fragment.get_ref(), css)
 }
 
 #[inline]
 pub(crate) fn select_fragment_first(html: &str, css: &str) -> PyResult<Option<Element>> {
-    parse_selector(css)?;
     let fragment = parse_owned_html_unlimited(html.to_string())?;
     select_first_element_from_dom(fragment.get_ref(), css)
 }
@@ -57,7 +60,6 @@ pub(crate) fn select_with_limit(
 ) -> PyResult<Vec<Element>> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-    parse_selector(css)?;
     let parsed = parse_owned_html_unlimited(html_to_parse.into_owned())?;
 
     select_elements_from_dom(parsed.get_ref(), css)
@@ -72,7 +74,6 @@ pub(crate) fn select_first_with_limit(
 ) -> PyResult<Option<Element>> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
-    parse_selector(css)?;
     let parsed = parse_owned_html_unlimited(html_to_parse.into_owned())?;
 
     select_first_element_from_dom(parsed.get_ref(), css)

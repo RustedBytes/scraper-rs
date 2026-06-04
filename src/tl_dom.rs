@@ -185,6 +185,32 @@ fn collect_matching_handles(
     }
 }
 
+fn find_matching_handle(
+    selector: &Selector<'_>,
+    handle: NodeHandle,
+    ancestors: &mut Vec<NodeHandle>,
+    parser: &TlParser<'_>,
+) -> Option<NodeHandle> {
+    let node = handle.get(parser)?;
+
+    if selector_matches_node(selector, node, ancestors, parser) {
+        return Some(handle);
+    }
+
+    if let Some(tag) = node.as_tag() {
+        ancestors.push(handle);
+        for child in tag.children().top().iter() {
+            if let Some(found) = find_matching_handle(selector, *child, ancestors, parser) {
+                ancestors.pop();
+                return Some(found);
+            }
+        }
+        ancestors.pop();
+    }
+
+    None
+}
+
 pub(crate) fn select_elements_from_dom(
     dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>,
     css: &str,
@@ -211,7 +237,20 @@ pub(crate) fn select_first_element_from_dom(
     dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>,
     css: &str,
 ) -> PyResult<Option<Element>> {
-    Ok(select_elements_from_dom(dom, css)?.into_iter().next())
+    let selector = tl::parse_query_selector(css)
+        .ok_or_else(|| PyValueError::new_err(format!("Invalid CSS selector {css:?}")))?;
+    let parser = dom.parser();
+    let mut ancestors = Vec::new();
+
+    for handle in dom.children() {
+        if let Some(found) = find_matching_handle(&selector, *handle, &mut ancestors, parser) {
+            return Ok(found
+                .get(parser)
+                .and_then(|node| snapshot_node(node, parser)));
+        }
+    }
+
+    Ok(None)
 }
 
 #[inline]

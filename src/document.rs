@@ -5,7 +5,6 @@ use pyo3::prelude::*;
 
 use crate::element::Element;
 use crate::prettify::prettify_document_html;
-use crate::selectors::parse_selector;
 use crate::tl_dom::{
     document_text, parse_owned_html_unlimited, parse_owned_html_with_raw, select_elements_from_dom,
     select_first_element_from_dom,
@@ -156,7 +155,6 @@ impl Document {
     ///
     /// Returns an error if `css` is not a valid CSS selector.
     pub fn select(&self, css: &str) -> PyResult<Vec<Element>> {
-        parse_selector(css)?;
         if self.closed {
             return Ok(Vec::new());
         }
@@ -171,7 +169,6 @@ impl Document {
     ///
     /// Returns an error if `css` is not a valid CSS selector.
     pub fn select_first(&self, css: &str) -> PyResult<Option<Element>> {
-        parse_selector(css)?;
         if self.closed {
             return Ok(None);
         }
