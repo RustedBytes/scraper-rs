@@ -5,7 +5,8 @@ edition = "2024"
 
 [lib]
 name = "scraper_rs"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+doctest = false
 
 [features]
 default = []
@@ -21,6 +22,25 @@ scraper = { version = "0.27.0", git = "https://github.com/rust-scraper/scraper",
 
 xee-xpath = "0.1.5"
 html5ever = "0.39.0"
+
+[dev-dependencies]
+criterion = { version = "0.7", features = ["async_tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[[bench]]
+name = "sync_async"
+path = "benchmarks/sync_async.rs"
+harness = false
+
+[[bench]]
+name = "parser_comparison"
+path = "benchmarks/parser_comparison.rs"
+harness = false
+
+[[bench]]
+name = "parse_scaling"
+path = "benchmarks/parse_scaling.rs"
+harness = false
 
 [profile.release]
 lto = "fat"
