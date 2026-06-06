@@ -6,6 +6,15 @@
 
 Python bindings for high-performance Rust HTML parsing via PyO3. It provides a lightweight `Document`/`Element` API with CSS selectors backed by `rustedbytes-tl`, XPath (via `xee-xpath`), handy helpers, and zero Python-side parsing work.
 
+## Install
+
+```bash
+pip install scraper-rust
+
+# or using uv
+uv add scraper-rust
+```
+
 ## Quick start
 
 ```py
