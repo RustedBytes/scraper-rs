@@ -16,7 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ fromJSON(github.event.inputs.python-version != '' && format('["{0}"]', github.event.inputs.python-version) || '["3.10","3.11","3.12","3.13","3.13t","3.14","3.14t"]') }}
+        # PyO3 0.29 supports free-threaded CPython starting with 3.14.
+        python-version: ${{ fromJSON(github.event.inputs.python-version != '' && format('["{0}"]', github.event.inputs.python-version) || '["3.10","3.11","3.12","3.13","3.14","3.14t"]') }}
 
     steps:
       - name: Checkout repository
@@ -44,11 +45,7 @@ jobs:
       - name: Build extension module
         run: |
           source .venv/bin/activate
-          if [[ "${{ matrix.python-version }}" == "3.13t" || "${{ matrix.python-version }}" == "3.14t" ]]; then
-            maturin develop --release --locked
-          else
-            maturin develop --release --locked
-          fi
+          maturin develop --release --locked
 
       - name: Run tests
         run: |

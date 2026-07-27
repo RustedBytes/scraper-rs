@@ -97,7 +97,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.13t', '3.14t']
+        # PyO3 0.29 supports free-threaded CPython starting with 3.14.
+        python-version: ['3.14t']
         include:
           - name: linux-x86_64
             runner: ubuntu-latest
