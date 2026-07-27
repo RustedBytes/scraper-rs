@@ -233,6 +233,10 @@ fn prettify_helpers_format_document_and_fragment() {
     assert!(doc_pretty.contains("<span>Hi</span>"));
     assert!(doc_pretty.contains("<p>A &amp; B</p>"));
     assert!(doc_pretty.contains("<br>"));
+    assert_eq!(
+        prettify_document_html("<p>&gt; &amp; &#65; &#x41; &</p>"),
+        "<p>&gt; &amp; &#65; &#x41; &amp;</p>"
+    );
 
     let fragment_pretty =
         prettify_fragment_html(r#"hello <span data-x="1"> world </span>"#).unwrap();

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from . import (
-    _AsyncDocumentCore,
-    _AsyncElementCore,
-    first_async as _first_async,
-    parse_async as _parse_async,
-    prettify_async as _prettify_async,
-    select_async as _select_async,
-    select_first_async as _select_first_async,
-    xpath_async as _xpath_async,
-    xpath_first_async as _xpath_first_async,
-)
+from . import scraper_rs as _core
+
+_AsyncDocumentCore = _core._AsyncDocumentCore
+_AsyncElementCore = _core._AsyncElementCore
+_first_async = _core.first_async
+_parse_async = _core.parse_async
+_prettify_async = _core.prettify_async
+_select_async = _core.select_async
+_select_first_async = _core.select_first_async
+_xpath_async = _core.xpath_async
+_xpath_first_async = _core.xpath_first_async
 
 
 def _wrap_element(element: _AsyncElementCore | None) -> "AsyncElement | None":

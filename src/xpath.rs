@@ -141,6 +141,9 @@ pub(crate) fn xpath_with_limit(
 ) -> PyResult<Vec<Element>> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
+    if html_to_parse.len() < html.len() {
+        return evaluate_fragment_xpath_with_fallback(html_to_parse.as_ref(), expr);
+    }
     match parse_xpath_documents(html_to_parse.as_ref(), "HTML document") {
         Ok((mut documents, document_handle)) => {
             evaluate_xpath_elements(&mut documents, document_handle, expr)
@@ -160,6 +163,9 @@ pub(crate) fn xpath_first_with_limit(
 ) -> PyResult<Option<Element>> {
     let max_size_bytes = max_size_bytes.unwrap_or(DEFAULT_MAX_PARSE_BYTES);
     let html_to_parse = ensure_within_size_limit(html, max_size_bytes, truncate_on_limit)?;
+    if html_to_parse.len() < html.len() {
+        return evaluate_fragment_xpath_first_with_fallback(html_to_parse.as_ref(), expr);
+    }
     match parse_xpath_documents(html_to_parse.as_ref(), "HTML document") {
         Ok((mut documents, document_handle)) => {
             evaluate_xpath_first_element(&mut documents, document_handle, expr)
@@ -219,12 +225,7 @@ pub(crate) fn evaluate_fragment_xpath_with_fallback(
     if normalized.is_empty() {
         return Ok(Vec::new());
     }
-    match parse_xpath_documents(&normalized, "HTML document") {
-        Ok((mut documents, document_handle)) => {
-            evaluate_xpath_elements(&mut documents, document_handle, expr)
-        }
-        Err(_) => Ok(Vec::new()),
-    }
+    evaluate_fragment_xpath(&normalized, expr)
 }
 
 pub(crate) fn evaluate_fragment_xpath_first_with_fallback(
@@ -235,12 +236,7 @@ pub(crate) fn evaluate_fragment_xpath_first_with_fallback(
     if normalized.is_empty() {
         return Ok(None);
     }
-    match parse_xpath_documents(&normalized, "HTML document") {
-        Ok((mut documents, document_handle)) => {
-            evaluate_xpath_first_element(&mut documents, document_handle, expr)
-        }
-        Err(_) => Ok(None),
-    }
+    evaluate_fragment_xpath_first(&normalized, expr)
 }
 
 pub(crate) struct XPathDocumentState {

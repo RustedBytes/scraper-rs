@@ -20,6 +20,44 @@ pub(crate) fn escape_html(value: &str) -> String {
 }
 
 #[inline]
+fn entity_reference_len(value: &str) -> Option<usize> {
+    let semicolon = value.find(';')?;
+    let reference = &value[..semicolon];
+    let valid = if let Some(numeric) = reference.strip_prefix('#') {
+        if let Some(hex) = numeric
+            .strip_prefix('x')
+            .or_else(|| numeric.strip_prefix('X'))
+        {
+            !hex.is_empty() && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+        } else {
+            !numeric.is_empty() && numeric.bytes().all(|byte| byte.is_ascii_digit())
+        }
+    } else {
+        !reference.is_empty() && reference.bytes().all(|byte| byte.is_ascii_alphanumeric())
+    };
+    valid.then_some(semicolon + 1)
+}
+
+#[inline]
+fn escape_html_text(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some((before, after_ampersand)) = rest.split_once('&') {
+        escaped.push_str(&escape_html(before));
+        rest = &rest[before.len() + 1..];
+        if let Some(reference_len) = entity_reference_len(after_ampersand) {
+            escaped.push('&');
+            escaped.push_str(&after_ampersand[..reference_len]);
+            rest = &after_ampersand[reference_len..];
+        } else {
+            escaped.push_str("&amp;");
+        }
+    }
+    escaped.push_str(&escape_html(rest));
+    escaped
+}
+
+#[inline]
 fn push_indent(out: &mut String, level: usize, indent_size: usize) {
     let spaces = level.saturating_mul(indent_size);
     out.reserve(spaces);
@@ -135,7 +173,7 @@ fn serialize_pretty_element_into(
         && let PrettyChild::Text(text) = &children[0]
     {
         out.push('>');
-        out.push_str(&escape_html(text));
+        out.push_str(&escape_html_text(text));
         out.push_str("</");
         out.push_str(&name);
         out.push_str(">\n");
@@ -160,7 +198,7 @@ fn serialize_pretty_element_into(
             }
             PrettyChild::Text(text) => {
                 push_indent(out, level + 1, indent_size);
-                out.push_str(&escape_html(&text));
+                out.push_str(&escape_html_text(&text));
                 out.push('\n');
             }
         }
@@ -191,7 +229,7 @@ pub(crate) fn prettify_document_html(html: &str) -> String {
                 tl::Node::Raw(text) => {
                     let normalized = normalized_text(&bytes_to_string(text));
                     if !normalized.is_empty() {
-                        out.push_str(&escape_html(&normalized));
+                        out.push_str(&escape_html_text(&normalized));
                         out.push('\n');
                     }
                 }
@@ -226,7 +264,7 @@ pub(crate) fn prettify_fragment_html(html: &str) -> PyResult<String> {
                     if normalized.is_empty() {
                         continue;
                     }
-                    out.push_str(&escape_html(&normalized));
+                    out.push_str(&escape_html_text(&normalized));
                     out.push('\n');
                 }
                 tl::Node::Comment(_) => {}
