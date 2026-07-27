@@ -32,7 +32,7 @@ print(doc.text)  # "First Second"
 
 items = doc.select(".item")
 print(items[0].attr("data-id"))  # "1"
-print(items[0].to_dict())        # {"tag": "div", "text": "First", "html": "<a...>", ...}
+print(items[0].to_dict())  # {"tag": "div", "text": "First", "html": "<a...>", ...}
 
 first_link = doc.select_first("a[href]")  # alias: doc.find(...)
 print(first_link.text, first_link.attr("href"))  # First /a
@@ -47,9 +47,11 @@ print(doc.xpath_first("//div[@data-id='1']/a").attr("href"))  # "/a"
 # Functional helpers
 links = select(html, "a[href]")
 print([link.attr("href") for link in links])  # ["/a", "/b"]
-print(first(html, "a[href]").text)            # First
-print(select_first(html, "a[href]").text)     # First
-print([link.text for link in xpath(html, "//div[@class='item']/a")])  # ["First", "Second"]
+print(first(html, "a[href]").text)  # First
+print(select_first(html, "a[href]").text)  # First
+print(
+    [link.text for link in xpath(html, "//div[@class='item']/a")]
+)  # ["First", "Second"]
 print(prettify(html))
 ```
 

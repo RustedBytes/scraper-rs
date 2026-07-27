@@ -11,7 +11,7 @@ from scraper_rs import Document
 
 doc = Document(
     html,
-    max_size_bytes=None,      # default: 1 GiB
+    max_size_bytes=None,  # default: 1 GiB
     truncate_on_limit=False,  # default: error on oversized HTML
 )
 ```

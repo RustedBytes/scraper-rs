@@ -31,11 +31,13 @@ from scraper_rs import asyncio as async_scraper
 
 html = "<div class='item'><a href='/a'>First</a></div>"
 
+
 async def main():
     async with await async_scraper.parse(html) as doc:
         items = await doc.select(".item")
         first_link = await items[0].select_first("a[href]")
         print(first_link.text, first_link.attr("href"))
+
 
 asyncio.run(main())
 ```
