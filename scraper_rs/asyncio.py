@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .scraper_rs import (
+from . import (
     _AsyncDocumentCore,
     _AsyncElementCore,
     first_async as _first_async,
