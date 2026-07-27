@@ -23,7 +23,7 @@ This file contains essential information for Large Language Models (LLMs) to eff
   - `pyo3-async-runtimes` v0.28 with `tokio-runtime` feature
   - `tokio` v1 (rt, macros) for async wrappers
 - **Python** 3.10+
-  - Type annotations and stub files (`scraper_rs.pyi`, `py.typed`)
+  - Type annotations and stub files (`__init__.pyi`, `py.typed`)
   - Async support via `asyncio` module
 - **Build System**
   - `maturin` - Build PyO3 wheels
@@ -59,8 +59,9 @@ scraper-rs/
 │   ├── demo_asyncio.py     # Async usage examples
 │   ├── demo_async_document.py
 │   └── demo_prettify_url.py
-├── scraper_rs/             # Python package directory (async wrappers + import glue)
-├── scraper_rs.pyi          # Type stub file
+├── scraper_rs/
+│   ├── __init__.pyi          # Type stub file
+│   └── asyncio.pyi           # async wrappers
 ├── py.typed                # PEP 561 marker for type support
 ├── Cargo.toml              # Rust package configuration
 ├── pyproject.toml          # Python package configuration
@@ -77,7 +78,7 @@ scraper-rs/
 - **`src/functions.rs`**: Top-level helpers: `parse()`, `parse_document()`, `parse_fragment()`, `prettify()`, `select()`, `select_first()`, `first()`, `xpath()`, `xpath_first()`
 - **`src/selectors.rs`**, **`src/xpath.rs`**, **`src/limits.rs`**: selector caches, XPath conversion, size limit enforcement, and UTF-8-safe truncation
 
-- **`scraper_rs.pyi`**: Type stubs for IDE support and type checking
+- **`__init__.pyi`**: Type stubs for IDE support and type checking
 
 - **`Cargo.toml`**: Rust crate configuration
   - `crate-type = ["cdylib"]` for Python extension module
@@ -240,7 +241,7 @@ Module: `scraper_rs.asyncio`
 - Release build optimizations in `Cargo.toml` for smaller binary size
 
 ### Python Code
-- Type annotations required (uses `scraper_rs.pyi` stub file)
+- Type annotations required (uses `__init__.pyi` stub file)
 - Follow PEP 8 style guidelines
 - Use descriptive variable names
 - Include docstrings for public functions
@@ -258,7 +259,7 @@ Module: `scraper_rs.asyncio`
 ### Adding a New Method to Document
 1. Add Rust implementation in `src/document.rs` under `impl Document`
 2. Add `#[pymethods]` annotation if needed
-3. Update `scraper_rs.pyi` with type signature
+3. Update `__init__.pyi` with type signature
 4. Add tests in `tests/test_scraper.py`
 5. If it should be async, update `scraper_rs/asyncio.py` and `scraper_rs/asyncio.pyi`
 6. Update README.md with usage example
@@ -269,7 +270,7 @@ Module: `scraper_rs.asyncio`
 1. Add Rust function in `src/functions.rs` with `#[pyfunction]`
 2. Register with `m.add_function(wrap_pyfunction!(function_name, m)?)?` in `scraper_rs` module
 3. Export in `__all__` if applicable
-4. Update `scraper_rs.pyi`
+4. Update `__init__.pyi`
 5. Add async wrapper in `scraper_rs/asyncio.py` and `scraper_rs/asyncio.pyi` if needed
 6. Add tests
 7. Update documentation
@@ -296,7 +297,7 @@ See `.github/workflows/release.yml` and `.github/workflows/bump-version.yml`
 4. **UTF-8 safety**: Truncation must respect character boundaries
 5. **Async wrappers**: Public async wrappers live in `scraper_rs/asyncio.py`; keep their stubs and tests aligned with sync behavior
 6. **Rust modules are split by responsibility**: `src/lib.rs` is the module entry point; add core behavior to the focused module that owns it
-7. **Type stubs are critical**: Always update `scraper_rs.pyi` when changing APIs
+7. **Type stubs are critical**: Always update `__init__.pyi` when changing APIs
 8. **Tests are comprehensive**: Follow existing test patterns in `tests/`
 9. **Build artifacts**: `target/` and `.venv/` should not be committed
 10. **Use `just` commands**: They handle common workflows correctly
