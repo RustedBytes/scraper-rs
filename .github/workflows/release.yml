@@ -82,74 +82,9 @@ jobs:
         with:
           name: wheels-${{ matrix.name }}
           path: dist/*.whl
+          if-no-files-found: error
 
       - name: Upload wheels to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.whl
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-free-threaded-wheels:
-    name: Build free-threaded wheels on ${{ matrix.name }} (Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # PyO3 0.29 supports free-threaded CPython starting with 3.14.
-        python-version: ['3.14t']
-        include:
-          - name: linux-x86_64
-            runner: ubuntu-latest
-            platform: linux
-          - name: linux-arm64
-            runner: ubuntu-24.04-arm
-            platform: linux
-          - name: windows
-            runner: windows-latest
-            platform: windows
-          - name: macos
-            runner: macos-latest
-            platform: macos
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-          allow-prereleases: true
-
-      - name: Install zig (for Linux manylinux builds)
-        if: matrix.platform == 'linux'
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.11.0
-
-      - name: Build free-threaded wheels (Linux - using zig for manylinux)
-        if: matrix.platform == 'linux'
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --strip --out dist --zig --interpreter python
-
-      - name: Build free-threaded wheels (Windows/macOS)
-        if: matrix.platform == 'windows' || matrix.platform == 'macos'
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --strip --out dist
-
-      - name: Upload free-threaded wheels as artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: wheels-free-threaded-${{ matrix.name }}-${{ matrix.python-version }}
-          path: dist/*.whl
-
-      - name: Upload free-threaded wheels to release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.whl
@@ -175,6 +110,7 @@ jobs:
         with:
           name: sdist
           path: dist/*.tar.gz
+          if-no-files-found: error
 
       - name: Upload sdist to release
         uses: softprops/action-gh-release@v2
@@ -187,7 +123,7 @@ jobs:
   publish-to-pypi:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: [build-wheels, build-free-threaded-wheels, build-sdist]
+    needs: [build-wheels, build-sdist]
     environment:
       name: pypi
       url: https://pypi.org/p/scraper-rust
@@ -209,14 +145,48 @@ jobs:
           pattern: 'sdist'
           merge-multiple: true
 
-      - name: List all files to be uploaded
+      - name: Validate distributions
         run: |
-          echo "Files in dist directory:"
           ls -lah dist/
-          echo "Total wheel files:"
-          ls -1 dist/*.whl | wc -l
-          echo "All wheel files:"
-          ls -1 dist/*.whl
+          python - <<'PY'
+          from pathlib import Path
+          import struct
+          import tarfile
+          import zipfile
+
+          dist = Path("dist")
+          wheels = sorted(dist.glob("*.whl"))
+          sdists = sorted(dist.glob("*.tar.gz"))
+
+          if len(wheels) != 4:
+              raise SystemExit(f"Expected 4 platform wheels, found {len(wheels)}")
+          if len(sdists) != 1:
+              raise SystemExit(f"Expected 1 source distribution, found {len(sdists)}")
+
+          for wheel in wheels:
+              data = wheel.read_bytes()
+              eocd = data.rfind(b"PK\x05\x06")
+              if eocd < 0 or eocd + 22 > len(data):
+                  raise SystemExit(f"{wheel}: missing or truncated ZIP end record")
+
+              comment_length = struct.unpack_from("<H", data, eocd + 20)[0]
+              archive_end = eocd + 22 + comment_length
+              if comment_length:
+                  raise SystemExit(f"{wheel}: ZIP comments are not accepted by PyPI")
+              if archive_end != len(data):
+                  trailing = len(data) - archive_end
+                  raise SystemExit(f"{wheel}: contains {trailing} trailing bytes")
+
+              with zipfile.ZipFile(wheel) as archive:
+                  bad_member = archive.testzip()
+                  if bad_member is not None:
+                      raise SystemExit(f"{wheel}: corrupt member {bad_member}")
+
+          with tarfile.open(sdists[0], mode="r:gz") as archive:
+              archive.getmembers()
+
+          print(f"Validated {len(wheels)} wheels and {len(sdists)} source distribution")
+          PY
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
