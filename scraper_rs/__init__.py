@@ -1,6 +1,6 @@
 """scraper_rs - Python bindings for Rust HTML parsing and selection."""
 
-from .. import scraper_rs as _scraper_rs
+from . import scraper_rs as _scraper_rs
 
 __doc__ = _scraper_rs.__doc__
 __all__ = [
