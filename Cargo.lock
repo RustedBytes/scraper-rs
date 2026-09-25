@@ -611,6 +611,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "html-escape"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1863,9 +1869,10 @@ dependencies = [
 
 [[package]]
 name = "scraper-rs"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "criterion",
+ "html-escape",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-build-config",

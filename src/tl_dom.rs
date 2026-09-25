@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use html_escape::decode_html_entities;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use tl::queryselector::Selector;
@@ -306,8 +307,122 @@ pub(crate) fn select_first_element_from_dom(
 }
 
 #[inline]
+/// Convert forgiving HTML into markup that Xee's XML parser can consume.
+///
+/// The HTML parser removes the doctype and repairs nesting. This serializer then closes HTML
+/// void elements, escapes raw-text content, and removes namespace declarations so ordinary HTML
+/// XPath expressions continue to match unqualified element names.
 pub(crate) fn normalized_document_html(html: &str) -> String {
-    parse_owned_html_unlimited(html.to_string())
-        .map(|dom| dom.get_ref().outer_html())
-        .unwrap_or_default()
+    let Ok(dom) = parse_owned_html_unlimited(html.to_string()) else {
+        return String::new();
+    };
+    let dom = dom.get_ref();
+    let parser = dom.parser();
+    let root_elements = dom
+        .children()
+        .iter()
+        .filter_map(|handle| handle.get(parser))
+        .filter(|node| node.as_tag().is_some())
+        .count();
+
+    let mut normalized = String::with_capacity(html.len());
+    if root_elements == 1 {
+        for handle in dom.children() {
+            if let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) {
+                serialize_xml_compatible_element(&mut normalized, tag, parser);
+            }
+        }
+    } else {
+        normalized.push_str("<xpath-document>");
+        for handle in dom.children() {
+            if let Some(node) = handle.get(parser) {
+                serialize_xml_compatible_node(&mut normalized, node, parser);
+            }
+        }
+        normalized.push_str("</xpath-document>");
+    }
+
+    normalized
+}
+
+fn xml_safe_name(name: &str) -> String {
+    let mut safe = String::with_capacity(name.len().max(1));
+    for (index, character) in name.chars().enumerate() {
+        let valid = if index == 0 {
+            character == '_' || character.is_alphabetic()
+        } else {
+            character == '_' || character == '-' || character == '.' || character.is_alphanumeric()
+        };
+        safe.push(if valid { character } else { '_' });
+    }
+    if safe.is_empty() {
+        safe.push('_');
+    }
+    safe.to_lowercase()
+}
+
+fn push_xml_escaped(out: &mut String, value: &str, attribute: bool) {
+    for character in decode_html_entities(value).chars() {
+        match character {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' if attribute => out.push_str("&quot;"),
+            '\t'
+            | '\n'
+            | '\r'
+            | '\u{20}'..='\u{d7ff}'
+            | '\u{e000}'..='\u{fffd}'
+            | '\u{10000}'..='\u{10ffff}' => out.push(character),
+            _ => out.push('\u{fffd}'),
+        }
+    }
+}
+
+fn serialize_xml_compatible_node(out: &mut String, node: &Node<'_>, parser: &TlParser<'_>) {
+    match node {
+        Node::Tag(tag) => serialize_xml_compatible_element(out, tag, parser),
+        Node::Raw(text) => push_xml_escaped(out, &bytes_to_string(text), false),
+        // Comments do not affect element-selection results and malformed HTML comments are not
+        // necessarily valid XML comments, so omit them from the XPath representation.
+        Node::Comment(_) => {}
+    }
+}
+
+fn serialize_xml_compatible_element(
+    out: &mut String,
+    tag: &tl::HTMLTag<'_>,
+    parser: &TlParser<'_>,
+) {
+    let name = xml_safe_name(&bytes_to_string(tag.name()));
+    out.push('<');
+    out.push_str(&name);
+
+    let mut emitted_attributes = HashSet::new();
+    for (attribute_name, attribute_value) in tag.attributes().iter() {
+        let attribute_name = xml_safe_name(attribute_name.as_ref());
+        if attribute_name == "xmlns" || attribute_name.starts_with("xmlns_") {
+            continue;
+        }
+        if !emitted_attributes.insert(attribute_name.clone()) {
+            continue;
+        }
+        out.push(' ');
+        out.push_str(&attribute_name);
+        out.push_str("=\"");
+        if let Some(attribute_value) = attribute_value {
+            push_xml_escaped(out, attribute_value.as_ref(), true);
+        }
+        out.push('"');
+    }
+
+    out.push('>');
+    for child in tag.children().top().iter() {
+        if let Some(child) = child.get(parser) {
+            serialize_xml_compatible_node(out, child, parser);
+        }
+    }
+    out.push_str("</");
+    out.push_str(&name);
+    out.push('>');
 }

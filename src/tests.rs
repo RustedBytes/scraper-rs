@@ -15,6 +15,7 @@ use crate::text::{
     attrs_from_element_html, inner_html_from_element_html, normalize_text_nodes,
     text_from_element_html, truncate_for_repr,
 };
+use crate::tl_dom::normalized_document_html;
 use crate::xpath::{
     compile_xpath, evaluate_fragment_xpath, evaluate_fragment_xpath_first, xpath_first_with_limit,
     xpath_with_limit,
@@ -156,6 +157,40 @@ fn fragment_xpath_helpers_return_expected_matches() {
 
     let missing = evaluate_fragment_xpath_first(html, ".//p").unwrap();
     assert!(missing.is_none());
+}
+
+#[test]
+fn xpath_accepts_normal_html_documents_with_doctype_and_void_elements() {
+    init_python();
+    let html = concat!(
+        "<!DOCTYPE html>",
+        r#"<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="/app.css">"#,
+        r#"<script>if (1 < 2 && 3 > 2) { window.ok = true; }</script></head>"#,
+        r#"<body><div class="quote" itemscope><span class="text">A &amp; B</span></div></body></html>"#,
+    );
+
+    let matches = xpath_with_limit(html, "//div[@class='quote']", None, false).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].text(), "A &amp; B");
+
+    let doc = Document::new(html, None, false).unwrap();
+    let first = doc
+        .xpath_first("//span[@class='text']")
+        .unwrap()
+        .expect("expected the text element");
+    assert_eq!(first.text(), "A &amp; B");
+}
+
+#[test]
+fn xpath_normalization_produces_well_formed_xml_compatible_markup() {
+    let normalized = normalized_document_html(
+        "<!doctype html><html xmlns='http://www.w3.org/1999/xhtml'><head><meta charset='utf-8'></head><body><br></body></html>",
+    );
+
+    assert!(!normalized.to_ascii_lowercase().contains("doctype"));
+    assert!(!normalized.contains("xmlns"));
+    assert!(normalized.contains("<meta charset=\"utf-8\"></meta>"));
+    assert!(normalized.contains("<br></br>"));
 }
 
 #[test]

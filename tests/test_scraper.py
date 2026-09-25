@@ -354,6 +354,31 @@ def test_xpath_selection(sample_html: str) -> None:
     assert nested[0].attr("href") == "/a"
 
 
+def test_xpath_accepts_normal_web_page_html() -> None:
+    html = """<!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="/main.css">
+        <script>if (1 < 2 && 3 > 2) { window.ok = true; }</script>
+      </head>
+      <body>
+        <div class="quote" itemscope>
+          <span class="text">A &amp; B</span>
+          <meta class="keywords" content="example">
+        </div>
+      </body>
+    </html>"""
+
+    doc = Document(html)
+    quotes = doc.xpath("//div[@class='quote']")
+    assert len(quotes) == 1
+    assert quotes[0].xpath_first(".//span[@class='text']").text == "A &amp; B"
+
+    assert len(xpath(html, "//div[@class='quote']")) == 1
+    assert xpath_first(html, "//meta[@class='keywords']") is not None
+
+
 def test_version_exposed() -> None:
     assert __version__ == importlib.metadata.version("scraper-rust")
 

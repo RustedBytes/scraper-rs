@@ -23,8 +23,9 @@ pub(crate) fn parse_xpath_documents(
     html: &str,
     parse_target: &str,
 ) -> PyResult<(Documents, DocumentHandle)> {
+    let normalized = normalized_document_html(html);
     let mut documents = Documents::new();
-    let document_handle = documents.add_string_without_uri(html).map_err(|e| {
+    let document_handle = documents.add_string_without_uri(&normalized).map_err(|e| {
         PyValueError::new_err(format!(
             "Failed to parse {parse_target} for XPath evaluation: {e}"
         ))
@@ -213,30 +214,18 @@ pub(crate) fn evaluate_fragment_xpath_first(html: &str, expr: &str) -> PyResult<
     evaluate_xpath_first_element(&mut documents, root_element, expr)
 }
 
-fn normalize_xpath_document_html(html: &str) -> String {
-    normalized_document_html(html)
-}
-
 pub(crate) fn evaluate_fragment_xpath_with_fallback(
     html: &str,
     expr: &str,
 ) -> PyResult<Vec<Element>> {
-    let normalized = normalize_xpath_document_html(html);
-    if normalized.is_empty() {
-        return Ok(Vec::new());
-    }
-    evaluate_fragment_xpath(&normalized, expr)
+    evaluate_fragment_xpath(html, expr)
 }
 
 pub(crate) fn evaluate_fragment_xpath_first_with_fallback(
     html: &str,
     expr: &str,
 ) -> PyResult<Option<Element>> {
-    let normalized = normalize_xpath_document_html(html);
-    if normalized.is_empty() {
-        return Ok(None);
-    }
-    evaluate_fragment_xpath_first(&normalized, expr)
+    evaluate_fragment_xpath_first(html, expr)
 }
 
 pub(crate) struct XPathDocumentState {
