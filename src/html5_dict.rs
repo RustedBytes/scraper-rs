@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use tl::{Node, NodeHandle, Parser, VDomGuard};
 
 use crate::limits::{DEFAULT_MAX_PARSE_BYTES, ensure_within_size_limit};
+use crate::tl_dom::{attrs_to_map, decode_entities, is_raw_text_element};
 
 const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 
@@ -24,13 +23,6 @@ fn bytes_to_string(bytes: &tl::Bytes<'_>) -> String {
     bytes.as_utf8_str().into_owned()
 }
 
-fn attrs_to_map(tag: &tl::HTMLTag<'_>) -> HashMap<String, String> {
-    tag.attributes()
-        .iter()
-        .map(|(name, value)| (name.into_owned(), value.unwrap_or_default().into_owned()))
-        .collect()
-}
-
 fn comment_text(raw: &tl::Bytes<'_>) -> String {
     let text = raw.as_utf8_str();
     text.strip_prefix("<!--")
@@ -43,6 +35,7 @@ fn tl_node_to_py(
     py: Python<'_>,
     parser: &Parser<'_, 32, 0, 0, 16, 16, 0>,
     node: &Node<'_>,
+    raw_text: bool,
 ) -> PyResult<Py<PyDict>> {
     let dict = PyDict::new(py);
 
@@ -54,16 +47,22 @@ fn tl_node_to_py(
             dict.set_item("attrs", attrs_to_map(tag))?;
 
             let children = PyList::empty(py);
+            let raw_text = raw_text || is_raw_text_element(tag);
             for child in tag.children().top().iter() {
                 if let Some(child_node) = child.get(parser) {
-                    children.append(tl_node_to_py(py, parser, child_node)?)?;
+                    children.append(tl_node_to_py(py, parser, child_node, raw_text)?)?;
                 }
             }
             dict.set_item("children", children)?;
         }
         Node::Raw(text) => {
             dict.set_item("node_type", "text")?;
-            dict.set_item("text", bytes_to_string(text))?;
+            let text = bytes_to_string(text);
+            if raw_text {
+                dict.set_item("text", text)?;
+            } else {
+                dict.set_item("text", decode_entities(&text).as_ref())?;
+            }
             dict.set_item("children", PyList::empty(py))?;
         }
         Node::Comment(text) => {
@@ -84,7 +83,7 @@ fn append_top_level_children(
     let children = PyList::empty(py);
     for handle in handles {
         if let Some(node) = handle.get(parser) {
-            children.append(tl_node_to_py(py, parser, node)?)?;
+            children.append(tl_node_to_py(py, parser, node, false)?)?;
         }
     }
     Ok(children.into())

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 use html_escape::decode_html_entities;
@@ -64,12 +65,67 @@ pub(crate) fn bytes_to_string(bytes: &tl::Bytes<'_>) -> String {
     bytes.as_utf8_str().into_owned()
 }
 
+/// Elements whose contents are raw text: character references inside them are
+/// literal characters, not entities (HTML "raw text" and legacy equivalents).
+const RAW_TEXT_ELEMENTS: [&str; 7] = [
+    "script",
+    "style",
+    "xmp",
+    "iframe",
+    "noembed",
+    "noframes",
+    "plaintext",
+];
+
+#[inline]
+pub(crate) fn is_raw_text_element(tag: &tl::HTMLTag<'_>) -> bool {
+    let name = tag.name().as_utf8_str();
+    RAW_TEXT_ELEMENTS
+        .iter()
+        .any(|raw| raw.eq_ignore_ascii_case(name.as_ref()))
+}
+
+/// Decode character references the way an HTML parser does for text and attribute values.
+///
+/// Only complete references ending in `;` are decoded, so query strings such as
+/// `?a=1&not=2` keep their literal `&` like browsers do in attribute values.
+#[inline]
+pub(crate) fn decode_entities(value: &str) -> Cow<'_, str> {
+    decode_html_entities(value)
+}
+
 #[inline]
 pub(crate) fn attrs_to_map(tag: &tl::HTMLTag<'_>) -> HashMap<String, String> {
     tag.attributes()
         .iter()
-        .map(|(name, value)| (name.into_owned(), value.unwrap_or_default().into_owned()))
+        .map(|(name, value)| {
+            let value = value.unwrap_or_default();
+            (name.into_owned(), decode_entities(&value).into_owned())
+        })
         .collect()
+}
+
+/// Append the decoded text content of `node` (comments excluded) to `out`.
+fn push_node_text(out: &mut String, node: &Node<'_>, parser: &TlParser<'_>, raw_text: bool) {
+    match node {
+        Node::Raw(bytes) => {
+            let text = bytes.as_utf8_str();
+            if raw_text {
+                out.push_str(&text);
+            } else {
+                out.push_str(&decode_entities(&text));
+            }
+        }
+        Node::Tag(tag) => {
+            let raw_text = raw_text || is_raw_text_element(tag);
+            for child in tag.children().top().iter() {
+                if let Some(child) = child.get(parser) {
+                    push_node_text(out, child, parser, raw_text);
+                }
+            }
+        }
+        Node::Comment(_) => {}
+    }
 }
 
 #[inline]
@@ -90,21 +146,26 @@ pub(crate) fn tag_inner_html(tag: &tl::HTMLTag<'_>, parser: &TlParser<'_>) -> St
 
 #[inline]
 pub(crate) fn node_text(node: &Node<'_>, parser: &TlParser<'_>) -> String {
-    normalize_text_nodes(std::iter::once(node.inner_text(parser).as_ref()))
+    let mut text = String::new();
+    push_node_text(&mut text, node, parser, false);
+    normalize_text_nodes(std::iter::once(text.as_str()))
 }
 
 #[inline]
 pub(crate) fn document_text(dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>) -> String {
     let parser = dom.parser();
-    normalize_text_nodes(
-        dom.children()
-            .iter()
-            .filter_map(|handle| handle.get(parser))
-            .map(|node| node.inner_text(parser))
-            .collect::<Vec<_>>()
-            .iter()
-            .map(|text| text.as_ref()),
-    )
+    // Each root is normalized as its own chunk, matching the previous behaviour.
+    let texts: Vec<String> = dom
+        .children()
+        .iter()
+        .filter_map(|handle| handle.get(parser))
+        .map(|node| {
+            let mut text = String::new();
+            push_node_text(&mut text, node, parser, false);
+            text
+        })
+        .collect();
+    normalize_text_nodes(texts.iter().map(String::as_str))
 }
 
 #[inline]

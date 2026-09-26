@@ -297,3 +297,13 @@ async def test_async_document_async_context_manager_closes_on_error(
 
     assert doc.html == ""
     assert await doc.select("a") == []
+
+
+@pytest.mark.asyncio
+async def test_async_text_and_attributes_decode_character_references() -> None:
+    doc = await async_scraper.parse('<a href="/p?a=1&amp;b=2">Fish &amp; Chips</a>')
+    link = await doc.select_first("a")
+
+    assert link.attr("href") == "/p?a=1&b=2"
+    assert link.text == "Fish & Chips"
+    assert doc.text == "Fish & Chips"

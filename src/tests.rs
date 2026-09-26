@@ -108,6 +108,39 @@ fn extractors_return_expected_element_parts() {
 }
 
 #[test]
+fn extractors_decode_character_references() {
+    let element_html = concat!(
+        r#"<a href="/p?a=1&amp;b=2&not=3" title="x &lt;y&gt; &quot;z&quot; &#65;&#x42;">"#,
+        "T &amp; U &copy; &#8364;<script>if (a &amp;&amp; b) {}</script>",
+        "<style>a::after { content: '&amp;' }</style><!-- &amp; --></a>",
+    );
+
+    let attrs = attrs_from_element_html(element_html);
+    // Only complete references are decoded, so `&not=3` keeps its literal `&`.
+    assert_eq!(attrs.get("href"), Some(&"/p?a=1&b=2&not=3".to_string()));
+    assert_eq!(attrs.get("title"), Some(&r#"x <y> "z" AB"#.to_string()));
+
+    // Script and style contents are raw text, and comments are not text at all.
+    assert_eq!(
+        text_from_element_html(element_html),
+        "T & U \u{a9} \u{20ac}if (a &amp;&amp; b) {}a::after { content: '&amp;' }"
+    );
+}
+
+#[test]
+fn document_text_decodes_character_references() {
+    init_python();
+    let doc = Document::new("<p>Fish &amp; Chips</p><p>1 &lt; 2</p>", None, false).unwrap();
+    assert_eq!(doc.text(), "Fish & Chips 1 < 2");
+
+    let first = doc
+        .select_first("p")
+        .unwrap()
+        .expect("expected a paragraph");
+    assert_eq!(first.text(), "Fish & Chips");
+}
+
+#[test]
 fn select_fragment_reports_invalid_css() {
     let message = match select_fragment("<div></div>", "div[") {
         Ok(_) => panic!("expected invalid selector to fail"),
@@ -171,14 +204,14 @@ fn xpath_accepts_normal_html_documents_with_doctype_and_void_elements() {
 
     let matches = xpath_with_limit(html, "//div[@class='quote']", None, false).unwrap();
     assert_eq!(matches.len(), 1);
-    assert_eq!(matches[0].text(), "A &amp; B");
+    assert_eq!(matches[0].text(), "A & B");
 
     let doc = Document::new(html, None, false).unwrap();
     let first = doc
         .xpath_first("//span[@class='text']")
         .unwrap()
         .expect("expected the text element");
-    assert_eq!(first.text(), "A &amp; B");
+    assert_eq!(first.text(), "A & B");
 }
 
 #[test]

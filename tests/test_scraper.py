@@ -373,7 +373,7 @@ def test_xpath_accepts_normal_web_page_html() -> None:
     doc = Document(html)
     quotes = doc.xpath("//div[@class='quote']")
     assert len(quotes) == 1
-    assert quotes[0].xpath_first(".//span[@class='text']").text == "A &amp; B"
+    assert quotes[0].xpath_first(".//span[@class='text']").text == "A & B"
 
     assert len(xpath(html, "//div[@class='quote']")) == 1
     assert xpath_first(html, "//meta[@class='keywords']") is not None
@@ -409,3 +409,32 @@ def test_document_context_manager_closes(sample_html: str) -> None:
 
     assert doc.html == ""
     assert doc.select("a") == []
+
+
+def test_text_and_attributes_decode_character_references() -> None:
+    html = (
+        '<div><a href="/p?a=1&amp;b=2&not=3" title="&quot;Q&quot; &#x26; A">'
+        "Fish &amp; Chips &mdash; &#169;</a>"
+        "<script>if (a &amp;&amp; b) {}</script></div>"
+    )
+    doc = Document(html)
+    link = doc.select_first("a")
+
+    assert link.attr("href") == "/p?a=1&b=2&not=3"
+    assert link.get("title", None) == '"Q" & A'
+    assert link.attrs["href"] == "/p?a=1&b=2&not=3"
+    assert link.text == "Fish & Chips \u2014 \u00a9"
+    assert doc.select_first("script").text == "if (a &amp;&amp; b) {}"
+    assert doc.xpath_first("//a").attr("href") == "/p?a=1&b=2&not=3"
+
+
+def test_dict_tree_decodes_text_and_attributes_but_not_raw_text() -> None:
+    parsed = parse_fragment(
+        '<p title="a &amp; b">x &lt; y<script>1 &amp;&amp; 2</script></p>'
+    )
+    paragraph = parsed["children"][0]
+    text_node, script = paragraph["children"]
+
+    assert paragraph["attrs"]["title"] == "a & b"
+    assert text_node["text"] == "x < y"
+    assert script["children"][0]["text"] == "1 &amp;&amp; 2"
