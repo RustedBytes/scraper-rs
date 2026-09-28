@@ -1,6 +1,6 @@
 [package]
 name = "scraper-rs"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 
 [lib]
@@ -10,12 +10,13 @@ doctest = false
 bench = false
 
 [features]
-default = []
+default = ["abi3"]
+abi3 = ["pyo3/abi3-py310"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 html-escape = "0.2.15"
-pyo3 = { version = "0.29.2", features = ["abi3-py310"] }
+pyo3 = { version = "0.29.2" }
 pyo3-async-runtimes = { version = "0.29", features = ["tokio-runtime"] }
 rayon = "1"
 tokio = { version = "1", features = ["rt", "macros", "sync"] }
@@ -29,6 +30,13 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [build-dependencies]
 pyo3-build-config = { version = "0.29.2", features = ["resolve-config"] }
+
+# PyPy 3.12 changed its C-extension symbol mapping. Pin PyO3's upstream
+# compatibility patch until it is included in a crates.io release.
+# https://github.com/PyO3/pyo3/pull/6448
+[patch.crates-io]
+pyo3-build-config = { git = "https://github.com/PyO3/pyo3", rev = "dd54cd6e129439ab2c5d98ff11f06f1e0ea85cd6" }
+pyo3-ffi = { git = "https://github.com/PyO3/pyo3", rev = "dd54cd6e129439ab2c5d98ff11f06f1e0ea85cd6" }
 
 [[bench]]
 name = "sync_async"

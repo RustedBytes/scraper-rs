@@ -135,7 +135,8 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 
 ## Installation
 
-Built wheels target `abi3` (CPython 3.10+). To build locally:
+CPython wheels target `abi3` (CPython 3.10+). Version-specific wheels are also
+published for PyPy 3.11 and 3.12. To build locally with the active interpreter:
 
 ```sh
 # Install maturin (uv is used in this repo, but pip works too)
@@ -143,6 +144,9 @@ pip install maturin
 
 # Build a wheel
 maturin build --release --compatibility linux
+
+# PyPy builds must disable the CPython-only abi3 feature
+maturin build --release --compatibility linux --no-default-features
 
 # Install the generated wheel
 pip install target/wheels/scraper_rust-*.whl
@@ -157,7 +161,7 @@ If you have `just` installed, the repo includes helpers: `just build` (local whe
 
 ## Development
 
-Requirements: Rust toolchain, Python 3.10+, `uv`, `maturin`, `pytest`, and `pytest-asyncio` for tests.
+Requirements: Rust toolchain, CPython 3.10+ or PyPy 3.11+, `uv`, `maturin`, `pytest`, and `pytest-asyncio` for tests.
 
 - Run tests: `just test` or `uv run pytest tests/`
 - Format code: `just fmt` (or `cargo fmt --all` and `uv run ruff format`)
