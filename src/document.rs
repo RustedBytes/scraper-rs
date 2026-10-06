@@ -266,7 +266,7 @@ impl Document {
             for candidate in candidates {
                 let matches =
                     evaluate_xpath_elements(&mut state.documents, state.document_handle, &candidate)?;
-                if matches.len() == 1 && matches[0].outer_html == element.outer_html {
+                if matches.len() == 1 {
                     return Ok(Some(candidate));
                 }
             }
