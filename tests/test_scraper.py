@@ -355,7 +355,9 @@ def test_selector_generation_rejects_detached_or_foreign_elements() -> None:
 
     first = first_doc.find("span")
     foreign = second_doc.find("span")
-    detached = first.select_first("*")
+    container = first_doc.find("div")
+    assert container is not None
+    detached = container.select_first("span")
 
     assert first is not None
     assert foreign is not None
