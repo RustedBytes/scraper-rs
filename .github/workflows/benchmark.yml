@@ -2,10 +2,11 @@ name: Benchmark
 
 on:
   pull_request:
+  push:
+    branches: [master]
   workflow_dispatch:
     inputs:
       python-version:
-  pull_request:
         description: Python version to use for benchmarks
         required: false
         default: "3.12"
@@ -47,7 +48,7 @@ jobs:
         run: |
           source .venv/bin/activate
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            python benchmarks/bench_sync_async.py
+            PYO3_PYTHON="$PWD/.venv/bin/python" cargo bench --locked
           fi
           python benchmarks/bench_selectors.py --output benchmarks/selectors.json
 
@@ -60,4 +61,5 @@ jobs:
             benchmarks/*.txt
             benchmarks/*.log
             benchmarks/selectors.json
+            target/criterion/
           retention-days: 30
