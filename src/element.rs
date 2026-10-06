@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use tl::NodeHandle;
 
 use crate::prettify::prettify_fragment_html;
 use crate::selectors::{select_fragment, select_fragment_first};
@@ -23,6 +24,12 @@ use crate::xpath::{evaluate_fragment_xpath, evaluate_fragment_xpath_first};
 /// Note: This struct is NOT Clone because cached fields use `OnceLock` for
 /// thread-safe interior mutability (required for async support).
 /// If cloning is needed, use `to_dict()` and reconstruct.
+#[derive(Clone, Copy)]
+pub(crate) struct ElementSource {
+    pub(crate) document_id: u64,
+    pub(crate) handle: NodeHandle,
+}
+
 #[pyclass(module = "scraper_rs")]
 pub struct Element {
     pub(crate) tag: String,
@@ -33,6 +40,7 @@ pub struct Element {
     pub(crate) inner_html: OnceLock<String>,
     pub(crate) text: OnceLock<String>,
     pub(crate) attrs: OnceLock<HashMap<String, String>>,
+    pub(crate) source: Option<ElementSource>,
 }
 
 #[pymethods]
@@ -185,6 +193,27 @@ impl Element {
             inner_html: OnceLock::new(),
             text: OnceLock::new(),
             attrs: OnceLock::new(),
+            source: None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_dom_parts(
+        tag: String,
+        outer_html: String,
+        document_id: u64,
+        handle: NodeHandle,
+    ) -> Self {
+        Self {
+            tag,
+            outer_html,
+            inner_html: OnceLock::new(),
+            text: OnceLock::new(),
+            attrs: OnceLock::new(),
+            source: Some(ElementSource {
+                document_id,
+                handle,
+            }),
         }
     }
 }
