@@ -2,7 +2,14 @@ use std::collections::HashSet;
 
 use tl::{NodeHandle, VDom};
 
-use crate::tl_dom::{TlParser, attrs_to_map, bytes_to_string, select_handles_from_dom, xml_safe_name};
+use crate::tl_dom::{
+    TlParser, attrs_to_map, bytes_to_string, select_handles_from_dom, xml_safe_name,
+};
+
+// Bound both eager candidate allocation and XPath executions across all levels.
+// Exhaustion falls back to the validated absolute positional path.
+const XPATH_CANDIDATE_BUDGET: usize = 256;
+const XPATH_ATTRIBUTE_BUDGET: usize = 12;
 
 type Dom<'a> = VDom<'a, 32, 0, 0, 16, 16, 0>;
 
@@ -78,10 +85,7 @@ fn push_unique(out: &mut Vec<String>, seen: &mut HashSet<String>, value: String)
     }
 }
 
-fn simple_candidates(
-    handle: NodeHandle,
-    parser: &TlParser<'_>,
-) -> Vec<String> {
+fn simple_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<String> {
     let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) else {
         return Vec::new();
     };
@@ -109,11 +113,7 @@ fn simple_candidates(
     for name in PREFERRED {
         if let Some(value) = attrs.get(name).filter(|value| !value.is_empty()) {
             let escaped = css_string(value);
-            push_unique(
-                &mut out,
-                &mut seen,
-                format!("[{name}=\"{escaped}\"]"),
-            );
+            push_unique(&mut out, &mut seen, format!("[{name}=\"{escaped}\"]"));
             push_unique(
                 &mut out,
                 &mut seen,
@@ -141,7 +141,9 @@ fn simple_candidates(
         }
     }
 
-    for (name, value) in &attrs {
+    let mut remaining = attrs.iter().collect::<Vec<_>>();
+    remaining.sort_by(|left, right| left.0.cmp(right.0));
+    for (name, value) in remaining {
         if value.is_empty() || !valid_attr_name(name) || PREFERRED.contains(&name.as_str()) {
             continue;
         }
@@ -211,7 +213,7 @@ fn same_tag_position(
         let Some(tag) = sibling.get(parser).and_then(|node| node.as_tag()) else {
             continue;
         };
-        if bytes_to_string(tag.name()) != tag_name {
+        if xml_safe_name(&bytes_to_string(tag.name())) != xml_safe_name(tag_name) {
             continue;
         }
         position += 1;
@@ -238,10 +240,7 @@ fn xpath_literal(value: &str) -> String {
     format!("concat({})", parts.join(", \"'\", "))
 }
 
-fn xpath_attribute_candidates(
-    handle: NodeHandle,
-    parser: &TlParser<'_>,
-) -> Vec<String> {
+fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<String> {
     let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) else {
         return Vec::new();
     };
@@ -278,17 +277,21 @@ fn xpath_attribute_candidates(
         }
     }
 
-    for (name, value) in attrs {
+    let mut remaining = attrs.into_iter().collect::<Vec<_>>();
+    remaining.sort_by(|left, right| left.0.cmp(&right.0));
+    for (name, value) in remaining {
         if value.is_empty()
             || PRIORITY.contains(&name.as_str())
             || BLACKLIST.contains(&name.as_str())
             || !valid_attr_name(&name)
+            || xml_safe_name(&name) != name
         {
             continue;
         }
         ordered.push((name, value));
     }
 
+    ordered.truncate(XPATH_ATTRIBUTE_BUDGET);
     let mut predicates = Vec::new();
     for (name, value) in &ordered {
         predicates.push(format!("@{name}={}", xpath_literal(value)));
@@ -312,6 +315,12 @@ fn xpath_attribute_candidates(
     predicates
 }
 
+fn push_xpath_unique(out: &mut Vec<String>, seen: &mut HashSet<String>, value: String) {
+    if out.len() < XPATH_CANDIDATE_BUDGET {
+        push_unique(out, seen, value);
+    }
+}
+
 pub(crate) fn generate_robust_xpath_candidates(
     dom: &Dom<'_>,
     target: NodeHandle,
@@ -328,14 +337,12 @@ pub(crate) fn generate_robust_xpath_candidates(
     let target_name = xml_safe_name(&bytes_to_string(target_tag.name()));
     let target_attrs = xpath_attribute_candidates(target, parser);
 
-    push_unique(&mut out, &mut seen, format!("//{target_name}"));
     for predicate in &target_attrs {
-        push_unique(
-            &mut out,
-            &mut seen,
-            format!("//{target_name}[{predicate}]"),
-        );
+        push_xpath_unique(&mut out, &mut seen, format!("//{target_name}[{predicate}]"));
     }
+
+    // Prefer semantic attributes even when the tag alone happens to be unique.
+    push_xpath_unique(&mut out, &mut seen, format!("//{target_name}"));
 
     let target_raw_name = bytes_to_string(target_tag.name());
     let target_position = if path.len() > 1 {
@@ -354,33 +361,38 @@ pub(crate) fn generate_robust_xpath_candidates(
             parser,
         )
     };
-    push_unique(
+    push_xpath_unique(
         &mut out,
         &mut seen,
         format!("//{target_name}[{target_position}]"),
     );
 
     for ancestor_index in (0..path.len().saturating_sub(1)).rev() {
+        if out.len() >= XPATH_CANDIDATE_BUDGET {
+            return Some(out);
+        }
         let ancestor = path[ancestor_index];
         let ancestor_tag = ancestor.get(parser)?.as_tag()?;
         let ancestor_name = xml_safe_name(&bytes_to_string(ancestor_tag.name()));
         let ancestor_attrs = xpath_attribute_candidates(ancestor, parser);
 
         for ancestor_predicate in ancestor_attrs.iter().take(12) {
+            if out.len() >= XPATH_CANDIDATE_BUDGET {
+                return Some(out);
+            }
             let prefix = format!("//{ancestor_name}[{ancestor_predicate}]");
-            push_unique(
-                &mut out,
-                &mut seen,
-                format!("{prefix}//{target_name}"),
-            );
+            push_xpath_unique(&mut out, &mut seen, format!("{prefix}//{target_name}"));
             for target_predicate in target_attrs.iter().take(12) {
-                push_unique(
+                if out.len() >= XPATH_CANDIDATE_BUDGET {
+                    return Some(out);
+                }
+                push_xpath_unique(
                     &mut out,
                     &mut seen,
                     format!("{prefix}//{target_name}[{target_predicate}]"),
                 );
             }
-            push_unique(
+            push_xpath_unique(
                 &mut out,
                 &mut seen,
                 format!("{prefix}//{target_name}[{target_position}]"),
@@ -389,7 +401,7 @@ pub(crate) fn generate_robust_xpath_candidates(
 
         // Level expansion without attributes mirrors Robula+'s AddLevel
         // transformation and gives a stable structural option.
-        push_unique(
+        push_xpath_unique(
             &mut out,
             &mut seen,
             format!("//{ancestor_name}//{target_name}"),
@@ -423,7 +435,12 @@ pub(crate) fn generate_absolute_xpath_selector(
         let tag_name = xml_safe_name(&raw_tag_name);
 
         let position = if index == 0 {
-            same_tag_position(dom.children().iter().copied(), handle, &raw_tag_name, parser)
+            same_tag_position(
+                dom.children().iter().copied(),
+                handle,
+                &raw_tag_name,
+                parser,
+            )
         } else {
             let parent = path[index - 1].get(parser)?.as_tag()?;
             same_tag_position(
@@ -442,4 +459,33 @@ pub(crate) fn generate_absolute_xpath_selector(
     }
 
     Some(xpath)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tl_dom::parse_owned_html_unlimited;
+
+    #[test]
+    fn xpath_search_has_a_global_budget() {
+        let mut html = String::new();
+        for depth in 0..64 {
+            html.push_str("<div");
+            for attr in 0..32 {
+                html.push_str(&format!(" data-a{attr}=\"{depth}-{attr}\""));
+            }
+            html.push('>');
+        }
+        html.push_str("<span>target</span>");
+        html.push_str(&"</div>".repeat(64));
+        let owned = parse_owned_html_unlimited(html).unwrap();
+        let dom = owned.get_ref();
+        let target = select_handles_from_dom(dom, "span").unwrap()[0];
+        let candidates = generate_robust_xpath_candidates(dom, target).unwrap();
+        assert_eq!(candidates.len(), XPATH_CANDIDATE_BUDGET);
+        assert_eq!(
+            candidates.iter().collect::<HashSet<_>>().len(),
+            candidates.len()
+        );
+    }
 }

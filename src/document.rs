@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -15,7 +15,7 @@ use crate::tl_dom::{
 };
 use crate::xpath::{
     XPathDocumentState, evaluate_xpath_elements, evaluate_xpath_first_element,
-    parse_xpath_documents,
+    find_unique_xpath_selector, parse_xpath_documents,
 };
 
 static NEXT_DOCUMENT_ID: AtomicU64 = AtomicU64::new(1);
@@ -205,8 +205,8 @@ impl Document {
 
     /// Generate a unique CSS selector for an element returned by this document's CSS API.
     ///
-    /// Returns None if the currently supported CSS selector subset cannot uniquely
-    /// identify the element. Elements produced from another document or from a
+    /// Returns None if the bounded search finds no supported unique CSS selector.
+    /// This does not prove that no such CSS selector exists. Elements from another document or a
     /// detached/nested element snapshot are rejected.
     ///
     /// # Errors
@@ -230,11 +230,10 @@ impl Document {
         Ok(generate_css_selector(self.dom.get_ref(), source.handle))
     }
 
-    /// Generate an absolute XPath selector for an element returned by this document's CSS API.
+    /// Generate a unique XPath selector for an element returned by this document's CSS API.
     ///
-    /// The generated XPath uses element positions among same-tag siblings and is
-    /// therefore available even when a unique CSS selector cannot be expressed by
-    /// scraper-rs's current CSS selector subset.
+    /// Try Robula+-style candidates, then a validated absolute positional path.
+    /// Uniqueness and target identity refer to the normalized XPath DOM.
     ///
     /// # Errors
     ///
@@ -254,28 +253,22 @@ impl Document {
             ));
         }
 
+        let Some(target_path) = generate_absolute_xpath_selector(self.dom.get_ref(), source.handle)
+        else {
+            return Ok(None);
+        };
         let candidates =
             generate_robust_xpath_candidates(self.dom.get_ref(), source.handle).unwrap_or_default();
-
-        if !candidates.is_empty() {
-            let mut state_lock = self.ensure_xpath_state()?;
-            let state = state_lock
-                .as_mut()
-                .ok_or_else(|| PyValueError::new_err("XPath state should be initialized"))?;
-
-            for candidate in candidates {
-                let matches =
-                    evaluate_xpath_elements(&mut state.documents, state.document_handle, &candidate)?;
-                if matches.len() == 1 {
-                    return Ok(Some(candidate));
-                }
-            }
-        }
-
-        Ok(generate_absolute_xpath_selector(
-            self.dom.get_ref(),
-            source.handle,
-        ))
+        let mut state_lock = self.ensure_xpath_state()?;
+        let state = state_lock
+            .as_mut()
+            .ok_or_else(|| PyValueError::new_err("XPath state should be initialized"))?;
+        find_unique_xpath_selector(
+            &mut state.documents,
+            state.document_handle,
+            &target_path,
+            candidates,
+        )
     }
 
     /// Evaluate an `XPath` expression against the whole document.

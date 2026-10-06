@@ -1,9 +1,11 @@
 name: Benchmark
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       python-version:
+  pull_request:
         description: Python version to use for benchmarks
         required: false
         default: "3.12"
@@ -44,7 +46,10 @@ jobs:
       - name: Run benchmarks
         run: |
           source .venv/bin/activate
-          python benchmarks/bench_sync_async.py
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            python benchmarks/bench_sync_async.py
+          fi
+          python benchmarks/bench_selectors.py --output benchmarks/selectors.json
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v7
@@ -54,4 +59,5 @@ jobs:
           path: |
             benchmarks/*.txt
             benchmarks/*.log
+            benchmarks/selectors.json
           retention-days: 30
