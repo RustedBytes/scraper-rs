@@ -331,9 +331,25 @@ def test_generate_css_and_xpath_selectors(sample_html: str) -> None:
     assert css_matches[0].attr("href") == "/b"
 
     assert xpath_selector is not None
+    assert xpath_selector.startswith("//")
     xpath_match = doc.xpath_first(xpath_selector)
     assert xpath_match is not None
     assert xpath_match.attr("href") == "/b"
+
+
+def test_generate_xpath_prefers_robust_semantic_locator() -> None:
+    doc = Document(
+        '<section data-testid="product-card"><span data-testid="price">$19</span></section>'
+    )
+    target = doc.select_first('[data-testid="price"]')
+
+    assert target is not None
+    xpath_selector = doc.generate_xpath_selector(target)
+
+    assert xpath_selector == "//span[@data-testid='price']"
+    match = doc.xpath_first(xpath_selector)
+    assert match is not None
+    assert match.text == "$19"
 
 
 def test_generate_xpath_when_css_subset_cannot_distinguish_siblings() -> None:
