@@ -121,7 +121,7 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - `Document(html: str)` / `Document.from_html(html)` parse HTML for CSS and keep the DOM; XPath parsing is initialized lazily on first XPath query.
 - `.select(css)` → `list[Element]`, `.select_first(css)` / `.find(css)` → first `Element | None`, `.css(css)` is an alias.
 - `.xpath(expr)` / `.xpath_first(expr)` evaluate XPath expressions that return element nodes.
-- `.generate_css_selector(element)` and `.generate_xpath_selector(element)` generate selectors for elements returned by the same `Document` CSS API. CSS generation returns `None` when the current CSS subset cannot uniquely distinguish the node; XPath has a positional fallback.
+- `.generate_css_selector(element)` and `.generate_xpath_selector(element)` generate selectors for elements returned by the same `Document` CSS API. CSS generation returns `None` when the current CSS subset cannot uniquely distinguish the node. XPath uses a Robula+-style search over semantic attributes, bounded attribute sets, ancestor levels, and position, then falls back to an absolute positional path.
 - `.prettify()` renders the current DOM as an indented string for readable output/debugging.
 - `.text` returns normalized text; `Document.html` is the original input HTML; `Element.html` is inner HTML.
 - `scraper_rs.asyncio` exposes async `parse`/`select`/`xpath` wrappers plus awaitable `AsyncDocument` / `AsyncElement` methods.
