@@ -317,6 +317,60 @@ def test_css_alias_and_invalid_selector(sample_html: str) -> None:
         doc.select("div[")
 
 
+
+def test_generate_css_and_xpath_selectors(sample_html: str) -> None:
+    doc = Document(sample_html)
+    target = doc.select("div[data-id='2'] a")[0]
+
+    css = doc.generate_css_selector(target)
+    xpath_selector = doc.generate_xpath_selector(target)
+
+    assert css is not None
+    css_matches = doc.select(css)
+    assert len(css_matches) == 1
+    assert css_matches[0].attr("href") == "/b"
+
+    assert xpath_selector is not None
+    xpath_match = doc.xpath_first(xpath_selector)
+    assert xpath_match is not None
+    assert xpath_match.attr("href") == "/b"
+
+
+def test_generate_xpath_when_css_subset_cannot_distinguish_siblings() -> None:
+    doc = Document("<ul><li>First</li><li>Second</li></ul>")
+    target = doc.select("li")[1]
+
+    assert doc.generate_css_selector(target) is None
+
+    xpath_selector = doc.generate_xpath_selector(target)
+    assert xpath_selector is not None
+    match = doc.xpath_first(xpath_selector)
+    assert match is not None
+    assert match.text == "Second"
+
+
+def test_selector_generation_rejects_detached_or_foreign_elements() -> None:
+    first_doc = Document("<div><span id='a'>A</span></div>")
+    second_doc = Document("<div><span id='b'>B</span></div>")
+
+    first = first_doc.find("span")
+    foreign = second_doc.find("span")
+    detached = first.select_first("*")
+
+    assert first is not None
+    assert foreign is not None
+
+    with pytest.raises(ValueError, match="different Document"):
+        first_doc.generate_css_selector(foreign)
+
+    # Nested Element selection parses an independent fragment and therefore has
+    # no stable handle back into the original document.
+    if detached is not None:
+        with pytest.raises(ValueError, match="requires an Element returned"):
+            first_doc.generate_xpath_selector(detached)
+
+
+
 def test_element_nested_selection(sample_html: str) -> None:
     doc = Document(sample_html)
 
