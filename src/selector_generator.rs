@@ -337,6 +337,29 @@ pub(crate) fn generate_robust_xpath_candidates(
         );
     }
 
+    let target_raw_name = bytes_to_string(target_tag.name());
+    let target_position = if path.len() > 1 {
+        let parent = path[path.len() - 2].get(parser)?.as_tag()?;
+        same_tag_position(
+            parent.children().top().iter().copied(),
+            target,
+            &target_raw_name,
+            parser,
+        )
+    } else {
+        same_tag_position(
+            dom.children().iter().copied(),
+            target,
+            &target_raw_name,
+            parser,
+        )
+    };
+    push_unique(
+        &mut out,
+        &mut seen,
+        format!("//{target_name}[{target_position}]"),
+    );
+
     for ancestor_index in (0..path.len().saturating_sub(1)).rev() {
         let ancestor = path[ancestor_index];
         let ancestor_tag = ancestor.get(parser)?.as_tag()?;
@@ -357,6 +380,11 @@ pub(crate) fn generate_robust_xpath_candidates(
                     format!("{prefix}//{target_name}[{target_predicate}]"),
                 );
             }
+            push_unique(
+                &mut out,
+                &mut seen,
+                format!("{prefix}//{target_name}[{target_position}]"),
+            );
         }
 
         // Level expansion without attributes mirrors Robula+'s AddLevel
