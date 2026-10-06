@@ -116,6 +116,41 @@ fn evaluate_xpath_sequence_first_element(
     Ok(Some(Element::from_parts(tag, outer_html)))
 }
 
+/// Validate node identity without serializing candidate result subtrees.
+pub(crate) fn find_unique_xpath_selector(
+    documents: &mut Documents,
+    document_handle: DocumentHandle,
+    target_path: &str,
+    candidates: Vec<String>,
+) -> PyResult<Option<String>> {
+    let target_sequence = execute_xpath_sequence(documents, document_handle, target_path)?;
+    let target_nodes = target_sequence
+        .elements(documents.xot())
+        .map_err(|e| PyValueError::new_err(format!("Invalid selector target: {e:?}")))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| PyValueError::new_err(format!("Invalid selector target: {e:?}")))?;
+    if target_nodes.len() != 1 {
+        return Err(PyValueError::new_err(
+            "Selector target path must identify exactly one node",
+        ));
+    }
+    for candidate in candidates {
+        let sequence = execute_xpath_sequence(documents, document_handle, &candidate)?;
+        let mut nodes = sequence
+            .elements(documents.xot())
+            .map_err(|e| PyValueError::new_err(format!("Invalid selector candidate: {e:?}")))?;
+        let Some(first) = nodes.next() else {
+            continue;
+        };
+        let first = first
+            .map_err(|e| PyValueError::new_err(format!("Invalid selector candidate: {e:?}")))?;
+        if first == target_nodes[0] && nodes.next().is_none() {
+            return Ok(Some(candidate));
+        }
+    }
+    Ok(Some(target_path.to_string()))
+}
+
 pub(crate) fn evaluate_xpath_elements(
     documents: &mut Documents,
     context_item: impl Itemable,

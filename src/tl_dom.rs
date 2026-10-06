@@ -177,6 +177,22 @@ pub(crate) fn snapshot_node(node: &Node<'_>, parser: &TlParser<'_>) -> Option<El
     ))
 }
 
+#[inline]
+pub(crate) fn snapshot_handle_with_source(
+    handle: NodeHandle,
+    parser: &TlParser<'_>,
+    document_id: u64,
+) -> Option<Element> {
+    let node = handle.get(parser)?;
+    let tag = node.as_tag()?;
+    Some(Element::from_dom_parts(
+        bytes_to_string(tag.name()),
+        node_outer_html(node, parser),
+        document_id,
+        handle,
+    ))
+}
+
 fn ancestor_matches(
     selector: &Selector<'_>,
     ancestors: &[NodeHandle],
@@ -325,10 +341,10 @@ fn find_matching_handle(
     None
 }
 
-pub(crate) fn select_elements_from_dom(
+pub(crate) fn select_handles_from_dom(
     dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>,
     css: &str,
-) -> PyResult<Vec<Element>> {
+) -> PyResult<Vec<NodeHandle>> {
     let selector = tl::parse_query_selector(css)
         .ok_or_else(|| PyValueError::new_err(format!("Invalid CSS selector {css:?}")))?;
     let parser = dom.parser();
@@ -339,10 +355,30 @@ pub(crate) fn select_elements_from_dom(
         collect_matching_handles(&mut handles, &selector, *handle, &mut ancestors, parser);
     }
 
-    Ok(handles
+    Ok(handles)
+}
+
+pub(crate) fn select_elements_from_dom(
+    dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>,
+    css: &str,
+) -> PyResult<Vec<Element>> {
+    let parser = dom.parser();
+    Ok(select_handles_from_dom(dom, css)?
         .into_iter()
         .filter_map(|handle| handle.get(parser))
         .filter_map(|node| snapshot_node(node, parser))
+        .collect())
+}
+
+pub(crate) fn select_elements_from_dom_with_source(
+    dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>,
+    css: &str,
+    document_id: u64,
+) -> PyResult<Vec<Element>> {
+    let parser = dom.parser();
+    Ok(select_handles_from_dom(dom, css)?
+        .into_iter()
+        .filter_map(|handle| snapshot_handle_with_source(handle, parser, document_id))
         .collect())
 }
 
@@ -361,6 +397,25 @@ pub(crate) fn select_first_element_from_dom(
             return Ok(found
                 .get(parser)
                 .and_then(|node| snapshot_node(node, parser)));
+        }
+    }
+
+    Ok(None)
+}
+
+pub(crate) fn select_first_element_from_dom_with_source(
+    dom: &tl::VDom<'_, 32, 0, 0, 16, 16, 0>,
+    css: &str,
+    document_id: u64,
+) -> PyResult<Option<Element>> {
+    let selector = tl::parse_query_selector(css)
+        .ok_or_else(|| PyValueError::new_err(format!("Invalid CSS selector {css:?}")))?;
+    let parser = dom.parser();
+    let mut ancestors = Vec::new();
+
+    for handle in dom.children() {
+        if let Some(found) = find_matching_handle(&selector, *handle, &mut ancestors, parser) {
+            return Ok(snapshot_handle_with_source(found, parser, document_id));
         }
     }
 
@@ -406,7 +461,7 @@ pub(crate) fn normalized_document_html(html: &str) -> String {
     normalized
 }
 
-fn xml_safe_name(name: &str) -> String {
+pub(crate) fn xml_safe_name(name: &str) -> String {
     let mut safe = String::with_capacity(name.len().max(1));
     for (index, character) in name.chars().enumerate() {
         let valid = if index == 0 {

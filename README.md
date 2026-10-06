@@ -36,6 +36,8 @@ print(items[0].to_dict())  # {"tag": "div", "text": "First", "html": "<a...>", .
 
 first_link = doc.select_first("a[href]")  # alias: doc.find(...)
 print(first_link.text, first_link.attr("href"))  # First /a
+print(doc.generate_css_selector(first_link))    # e.g. a[href="/a"]
+print(doc.generate_xpath_selector(first_link))  # Robula+-style XPath, with positional fallback
 links_within_first_item = items[0].select("a[href]")
 print([link.attr("href") for link in links_within_first_item])  # ["/a"]
 
@@ -119,6 +121,7 @@ Note: Truncation happens at valid UTF-8 character boundaries to prevent encoding
 - `Document(html: str)` / `Document.from_html(html)` parse HTML for CSS and keep the DOM; XPath parsing is initialized lazily on first XPath query.
 - `.select(css)` → `list[Element]`, `.select_first(css)` / `.find(css)` → first `Element | None`, `.css(css)` is an alias.
 - `.xpath(expr)` / `.xpath_first(expr)` evaluate XPath expressions that return element nodes.
+- `.generate_css_selector(element)` and `.generate_xpath_selector(element)` generate selectors for elements returned by the same `Document` CSS API. CSS generation returns `None` when its bounded search finds no unique selector supported by the current CSS subset; this is not a proof that no selector exists. XPath uses a Robula+-style search over semantic attributes, bounded attribute sets, ancestor levels, and position, then falls back to a validated absolute positional path. The search is capped at 256 candidates and 12 attributes per node; uniqueness and target identity are checked in the normalized XPath DOM.
 - `.prettify()` renders the current DOM as an indented string for readable output/debugging.
 - `.text` returns normalized text; `Document.html` is the original input HTML; `Element.html` is inner HTML.
 - `scraper_rs.asyncio` exposes async `parse`/`select`/`xpath` wrappers plus awaitable `AsyncDocument` / `AsyncElement` methods.

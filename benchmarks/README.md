@@ -52,3 +52,20 @@ Measures parse throughput across progressively larger deterministic HTML inputs:
 
 - Use `sync_async` to estimate scheduling cost when work is routed through a blocking async task. 
 - Use `parse_scaling` to watch parser throughput as input size grows.
+
+### bench_selectors.py
+
+After `maturin develop --release --locked`, run:
+
+```shell
+python benchmarks/bench_selectors.py --repeats 5 --output benchmarks/selectors.json
+```
+
+Measures CSS and XPath generation on mirrored deep DOMs (16/64/128 levels),
+attribute-heavy DOMs (8/32/128 attributes), and a combined 64-level/16-attribute
+case. Reports first-call and repeated-call latency, excluding HTML parsing and
+CSS target lookup. XPath result uniqueness and target text are checked outside
+the timed region. CSS `None` is allowed for indistinguishable sibling branches.
+The XPath compilation cache is thread-local and bounded, so repeated calls can
+still compile candidates when the search exceeds cache capacity. CI publishes
+JSON rather than enforcing unstable wall-clock thresholds.

@@ -1,18 +1,24 @@
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::element::Element;
 use crate::prettify::prettify_document_html;
+use crate::selector_generator::{
+    generate_absolute_xpath_selector, generate_css_selector, generate_robust_xpath_candidates,
+};
 use crate::tl_dom::{
     OwnedTlDom, document_text, parse_owned_html_unlimited, parse_owned_html_with_raw,
-    select_elements_from_dom, select_first_element_from_dom,
+    select_elements_from_dom_with_source, select_first_element_from_dom_with_source,
 };
 use crate::xpath::{
     XPathDocumentState, evaluate_xpath_elements, evaluate_xpath_first_element,
-    parse_xpath_documents,
+    find_unique_xpath_selector, parse_xpath_documents,
 };
+
+static NEXT_DOCUMENT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// A parsed HTML document with convenient, Pythonic selectors.
 ///
@@ -26,6 +32,7 @@ use crate::xpath::{
 #[pyclass(module = "scraper_rs", unsendable)]
 pub struct Document {
     dom: OwnedTlDom,
+    document_id: u64,
     xpath_state: Mutex<Option<XPathDocumentState>>,
     closed: bool,
 }
@@ -40,6 +47,7 @@ impl Document {
 
         Ok(Self {
             dom,
+            document_id: NEXT_DOCUMENT_ID.fetch_add(1, Ordering::Relaxed),
             xpath_state: Mutex::new(None),
             closed: false,
         })
@@ -154,7 +162,7 @@ impl Document {
         if self.closed {
             return Ok(Vec::new());
         }
-        select_elements_from_dom(self.dom.get_ref(), css)
+        select_elements_from_dom_with_source(self.dom.get_ref(), css, self.document_id)
     }
 
     /// Return the first matching element, or None if nothing matches.
@@ -168,7 +176,7 @@ impl Document {
         if self.closed {
             return Ok(None);
         }
-        select_first_element_from_dom(self.dom.get_ref(), css)
+        select_first_element_from_dom_with_source(self.dom.get_ref(), css, self.document_id)
     }
 
     /// Return the first matching element, or None if nothing matches.
@@ -193,6 +201,74 @@ impl Document {
     /// Returns an error if `css` is not a valid CSS selector.
     pub fn css(&self, css: &str) -> PyResult<Vec<Element>> {
         self.select(css)
+    }
+
+    /// Generate a unique CSS selector for an element returned by this document's CSS API.
+    ///
+    /// Returns None if the bounded search finds no supported unique CSS selector.
+    /// This does not prove that no such CSS selector exists. Elements from another document or a
+    /// detached/nested element snapshot are rejected.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the element is not attached to this document.
+    pub fn generate_css_selector(&self, element: PyRef<'_, Element>) -> PyResult<Option<String>> {
+        if self.closed {
+            return Ok(None);
+        }
+        let source = element.source.ok_or_else(|| {
+            PyValueError::new_err(
+                "Selector generation requires an Element returned by this Document's CSS selection API",
+            )
+        })?;
+        if source.document_id != self.document_id {
+            return Err(PyValueError::new_err(
+                "Element belongs to a different Document",
+            ));
+        }
+
+        Ok(generate_css_selector(self.dom.get_ref(), source.handle))
+    }
+
+    /// Generate a unique XPath selector for an element returned by this document's CSS API.
+    ///
+    /// Try Robula+-style candidates, then a validated absolute positional path.
+    /// Uniqueness and target identity refer to the normalized XPath DOM.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the element is not attached to this document.
+    pub fn generate_xpath_selector(&self, element: PyRef<'_, Element>) -> PyResult<Option<String>> {
+        if self.closed {
+            return Ok(None);
+        }
+        let source = element.source.ok_or_else(|| {
+            PyValueError::new_err(
+                "Selector generation requires an Element returned by this Document's CSS selection API",
+            )
+        })?;
+        if source.document_id != self.document_id {
+            return Err(PyValueError::new_err(
+                "Element belongs to a different Document",
+            ));
+        }
+
+        let Some(target_path) = generate_absolute_xpath_selector(self.dom.get_ref(), source.handle)
+        else {
+            return Ok(None);
+        };
+        let candidates =
+            generate_robust_xpath_candidates(self.dom.get_ref(), source.handle).unwrap_or_default();
+        let mut state_lock = self.ensure_xpath_state()?;
+        let state = state_lock
+            .as_mut()
+            .ok_or_else(|| PyValueError::new_err("XPath state should be initialized"))?;
+        find_unique_xpath_selector(
+            &mut state.documents,
+            state.document_handle,
+            &target_path,
+            candidates,
+        )
     }
 
     /// Evaluate an `XPath` expression against the whole document.

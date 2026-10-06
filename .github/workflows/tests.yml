@@ -1,9 +1,11 @@
 name: Tests
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       python-version:
+  pull_request:
         description: Python version to use for tests
         required: false
         default: ""
@@ -55,3 +57,7 @@ jobs:
         run: |
           source .venv/bin/activate
           pytest tests/
+
+      - name: Run Rust unit tests
+        if: matrix.python-version == '3.13'
+        run: PYO3_PYTHON="$PWD/.venv/bin/python" cargo test --lib --locked
