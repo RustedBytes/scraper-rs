@@ -352,6 +352,64 @@ def test_generate_xpath_prefers_robust_semantic_locator() -> None:
     assert match.text == "$19"
 
 
+def test_generate_xpath_prefers_href_for_links_and_survives_dom_change() -> None:
+    html_a = """
+    <html><body><main>
+      <aside id="most-read">
+        <h2>Most read</h2>
+        <ol>
+          <li><a href="/news/popular/a">First</a></li>
+          <li><a href="/news/popular/b">Second</a></li>
+        </ol>
+      </aside>
+    </main></body></html>
+    """
+
+    html_b = """
+    <html><body>
+      <div class="page-wrapper">
+        <main>
+          <section class="breaking">Breaking news</section>
+          <aside id="most-read">
+            <div class="widget-header"><h2>Most read</h2></div>
+            <ol>
+              <li><a href="/news/popular/new">New</a></li>
+              <li><a href="/news/popular/a">First</a></li>
+              <li><a href="/news/popular/b">Second</a></li>
+            </ol>
+          </aside>
+        </main>
+      </div>
+    </body></html>
+    """
+
+    doc_a = Document(html_a)
+    target = doc_a.select_first('a[href="/news/popular/b"]')
+
+    assert target is not None
+
+    xpath_selector = doc_a.generate_xpath_selector(target)
+    assert xpath_selector == "//a[@href='/news/popular/b']"
+
+    doc_b = Document(html_b)
+    matches = doc_b.xpath(xpath_selector)
+
+    assert len(matches) == 1
+    assert matches[0].attr("href") == "/news/popular/b"
+    assert matches[0].text == "Second"
+
+
+def test_generate_xpath_does_not_use_href_on_non_link_elements() -> None:
+    doc = Document('<div href="/not-a-link">Target</div>')
+    target = doc.select_first("div")
+
+    assert target is not None
+    xpath_selector = doc.generate_xpath_selector(target)
+
+    assert xpath_selector is not None
+    assert "@href=" not in xpath_selector
+
+
 def test_generate_xpath_when_css_subset_cannot_distinguish_siblings() -> None:
     doc = Document("<ul><li>First</li><li>Second</li></ul>")
     target = doc.select("li")[1]
