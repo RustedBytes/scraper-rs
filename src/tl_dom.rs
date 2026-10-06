@@ -461,7 +461,7 @@ pub(crate) fn normalized_document_html(html: &str) -> String {
     normalized
 }
 
-fn xml_safe_name(name: &str) -> String {
+pub(crate) fn xml_safe_name(name: &str) -> String {
     let mut safe = String::with_capacity(name.len().max(1));
     for (index, character) in name.chars().enumerate() {
         let valid = if index == 0 {
