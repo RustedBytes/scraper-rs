@@ -6,7 +6,9 @@ use pyo3::prelude::*;
 
 use crate::element::Element;
 use crate::prettify::prettify_document_html;
-use crate::selector_generator::{generate_css_selector, generate_xpath_selector};
+use crate::selector_generator::{
+    generate_absolute_xpath_selector, generate_css_selector, generate_robust_xpath_candidates,
+};
 use crate::tl_dom::{
     OwnedTlDom, document_text, parse_owned_html_unlimited, parse_owned_html_with_raw,
     select_elements_from_dom_with_source, select_first_element_from_dom_with_source,
@@ -252,7 +254,28 @@ impl Document {
             ));
         }
 
-        Ok(generate_xpath_selector(self.dom.get_ref(), source.handle))
+        let candidates =
+            generate_robust_xpath_candidates(self.dom.get_ref(), source.handle).unwrap_or_default();
+
+        if !candidates.is_empty() {
+            let mut state_lock = self.ensure_xpath_state()?;
+            let state = state_lock
+                .as_mut()
+                .ok_or_else(|| PyValueError::new_err("XPath state should be initialized"))?;
+
+            for candidate in candidates {
+                let matches =
+                    evaluate_xpath_elements(&mut state.documents, state.document_handle, &candidate)?;
+                if matches.len() == 1 && matches[0].outer_html == element.outer_html {
+                    return Ok(Some(candidate));
+                }
+            }
+        }
+
+        Ok(generate_absolute_xpath_selector(
+            self.dom.get_ref(),
+            source.handle,
+        ))
     }
 
     /// Evaluate an `XPath` expression against the whole document.
