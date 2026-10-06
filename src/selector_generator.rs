@@ -247,20 +247,19 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
     let attrs = attrs_to_map(tag);
     let mut ordered = Vec::new();
 
-    const PRIORITY: [&str; 9] = [
+    const SEMANTIC_PRIORITY: [&str; 8] = [
         "id",
         "data-testid",
         "data-test",
         "data-qa",
         "name",
-        "class",
-        "title",
         "aria-label",
         "itemprop",
+        "role",
     ];
-    const BLACKLIST: [&str; 10] = [
-        "href",
-        "src",
+    const PRESENTATION_PRIORITY: [&str; 3] = ["class", "title", "alt"];
+    const CONDITIONAL_LOCATION_ATTRS: [&str; 2] = ["href", "src"];
+    const BLACKLIST: [&str; 8] = [
         "onclick",
         "onload",
         "tabindex",
@@ -271,7 +270,31 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
         "maxlength",
     ];
 
-    for name in PRIORITY {
+    for name in SEMANTIC_PRIORITY {
+        if let Some(value) = attrs.get(name).filter(|value| !value.is_empty()) {
+            ordered.push((name.to_string(), value.clone()));
+        }
+    }
+
+    // Scraping-oriented ranking: a link target is usually more stable than
+    // structural position, while src is useful for content-bearing media.
+    // Keep these tag-aware instead of enabling href/src indiscriminately.
+    let tag_name = bytes_to_string(tag.name()).to_ascii_lowercase();
+    if tag_name == "a" || tag_name == "area" {
+        if let Some(value) = attrs.get("href").filter(|value| !value.is_empty()) {
+            ordered.push(("href".to_string(), value.clone()));
+        }
+    }
+    if matches!(
+        tag_name.as_str(),
+        "img" | "source" | "video" | "audio" | "iframe" | "script"
+    ) {
+        if let Some(value) = attrs.get("src").filter(|value| !value.is_empty()) {
+            ordered.push(("src".to_string(), value.clone()));
+        }
+    }
+
+    for name in PRESENTATION_PRIORITY {
         if let Some(value) = attrs.get(name).filter(|value| !value.is_empty()) {
             ordered.push((name.to_string(), value.clone()));
         }
@@ -281,7 +304,9 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
     remaining.sort_by(|left, right| left.0.cmp(&right.0));
     for (name, value) in remaining {
         if value.is_empty()
-            || PRIORITY.contains(&name.as_str())
+            || SEMANTIC_PRIORITY.contains(&name.as_str())
+            || PRESENTATION_PRIORITY.contains(&name.as_str())
+            || CONDITIONAL_LOCATION_ATTRS.contains(&name.as_str())
             || BLACKLIST.contains(&name.as_str())
             || !valid_attr_name(&name)
             || xml_safe_name(&name) != name
