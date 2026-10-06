@@ -7,6 +7,7 @@ mod html5_dict;
 mod limits;
 mod prettify;
 mod runtime;
+mod selector_generator;
 mod selectors;
 mod text;
 mod tl_dom;
