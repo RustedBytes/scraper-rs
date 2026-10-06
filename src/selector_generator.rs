@@ -223,7 +223,158 @@ fn same_tag_position(
     1
 }
 
-pub(crate) fn generate_xpath_selector(dom: &Dom<'_>, target: NodeHandle) -> Option<String> {
+fn xpath_literal(value: &str) -> String {
+    if !value.contains('\'') {
+        return format!("'{value}'");
+    }
+    if !value.contains('"') {
+        return format!("\"{value}\"");
+    }
+
+    let parts = value
+        .split('\'')
+        .map(|part| format!("'{part}'"))
+        .collect::<Vec<_>>();
+    format!("concat({})", parts.join(", \"'\", "))
+}
+
+fn xpath_attribute_candidates(
+    handle: NodeHandle,
+    parser: &TlParser<'_>,
+) -> Vec<String> {
+    let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) else {
+        return Vec::new();
+    };
+    let attrs = attrs_to_map(tag);
+    let mut ordered = Vec::new();
+
+    const PRIORITY: [&str; 9] = [
+        "id",
+        "data-testid",
+        "data-test",
+        "data-qa",
+        "name",
+        "class",
+        "title",
+        "aria-label",
+        "itemprop",
+    ];
+    const BLACKLIST: [&str; 10] = [
+        "href",
+        "src",
+        "onclick",
+        "onload",
+        "tabindex",
+        "width",
+        "height",
+        "style",
+        "size",
+        "maxlength",
+    ];
+
+    for name in PRIORITY {
+        if let Some(value) = attrs.get(name).filter(|value| !value.is_empty()) {
+            ordered.push((name.to_string(), value.clone()));
+        }
+    }
+
+    for (name, value) in attrs {
+        if value.is_empty()
+            || PRIORITY.contains(&name.as_str())
+            || BLACKLIST.contains(&name.as_str())
+            || !valid_attr_name(&name)
+        {
+            continue;
+        }
+        ordered.push((name, value));
+    }
+
+    let mut predicates = Vec::new();
+    for (name, value) in &ordered {
+        predicates.push(format!("@{name}={}", xpath_literal(value)));
+    }
+
+    // Robula+ also tries attribute sets. Bound this to pairs to avoid exponential
+    // growth while keeping the useful robustness benefit for scraping workloads.
+    let max_pairs = ordered.len().min(6);
+    for left in 0..max_pairs {
+        for right in (left + 1)..max_pairs {
+            let (left_name, left_value) = &ordered[left];
+            let (right_name, right_value) = &ordered[right];
+            predicates.push(format!(
+                "@{left_name}={} and @{right_name}={}",
+                xpath_literal(left_value),
+                xpath_literal(right_value)
+            ));
+        }
+    }
+
+    predicates
+}
+
+pub(crate) fn generate_robust_xpath_candidates(
+    dom: &Dom<'_>,
+    target: NodeHandle,
+) -> Option<Vec<String>> {
+    let parser = dom.parser();
+    let path = find_path(dom, target)?;
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+
+    // Robula+-style breadth: start with the target, then progressively add
+    // ancestor levels. At each level prefer tag, ID/attributes, attribute sets,
+    // and only later positional predicates.
+    let target_tag = target.get(parser)?.as_tag()?;
+    let target_name = xml_safe_name(&bytes_to_string(target_tag.name()));
+    let target_attrs = xpath_attribute_candidates(target, parser);
+
+    push_unique(&mut out, &mut seen, format!("//{target_name}"));
+    for predicate in &target_attrs {
+        push_unique(
+            &mut out,
+            &mut seen,
+            format!("//{target_name}[{predicate}]"),
+        );
+    }
+
+    for ancestor_index in (0..path.len().saturating_sub(1)).rev() {
+        let ancestor = path[ancestor_index];
+        let ancestor_tag = ancestor.get(parser)?.as_tag()?;
+        let ancestor_name = xml_safe_name(&bytes_to_string(ancestor_tag.name()));
+        let ancestor_attrs = xpath_attribute_candidates(ancestor, parser);
+
+        for ancestor_predicate in ancestor_attrs.iter().take(12) {
+            let prefix = format!("//{ancestor_name}[{ancestor_predicate}]");
+            push_unique(
+                &mut out,
+                &mut seen,
+                format!("{prefix}//{target_name}"),
+            );
+            for target_predicate in target_attrs.iter().take(12) {
+                push_unique(
+                    &mut out,
+                    &mut seen,
+                    format!("{prefix}//{target_name}[{target_predicate}]"),
+                );
+            }
+        }
+
+        // Level expansion without attributes mirrors Robula+'s AddLevel
+        // transformation and gives a stable structural option.
+        push_unique(
+            &mut out,
+            &mut seen,
+            format!("//{ancestor_name}//{target_name}"),
+        );
+    }
+
+    Some(out)
+}
+
+pub(crate) fn generate_absolute_xpath_selector(
+    dom: &Dom<'_>,
+    target: NodeHandle,
+) -> Option<String> {
     let parser = dom.parser();
     let path = find_path(dom, target)?;
     let root_element_count = dom
