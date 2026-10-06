@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use tl::{NodeHandle, VDom};
 
-use crate::tl_dom::{TlParser, attrs_to_map, bytes_to_string, select_handles_from_dom};
+use crate::tl_dom::{TlParser, attrs_to_map, bytes_to_string, select_handles_from_dom, xml_safe_name};
 
 type Dom<'a> = VDom<'a, 32, 0, 0, 16, 16, 0>;
 
@@ -226,20 +226,31 @@ fn same_tag_position(
 pub(crate) fn generate_xpath_selector(dom: &Dom<'_>, target: NodeHandle) -> Option<String> {
     let parser = dom.parser();
     let path = find_path(dom, target)?;
-    let mut xpath = String::new();
+    let root_element_count = dom
+        .children()
+        .iter()
+        .filter_map(|handle| handle.get(parser))
+        .filter(|node| node.as_tag().is_some())
+        .count();
+    let mut xpath = if root_element_count > 1 {
+        String::from("/xpath-document[1]")
+    } else {
+        String::new()
+    };
 
     for (index, handle) in path.iter().copied().enumerate() {
         let tag = handle.get(parser)?.as_tag()?;
-        let tag_name = bytes_to_string(tag.name());
+        let raw_tag_name = bytes_to_string(tag.name());
+        let tag_name = xml_safe_name(&raw_tag_name);
 
         let position = if index == 0 {
-            same_tag_position(dom.children().iter().copied(), handle, &tag_name, parser)
+            same_tag_position(dom.children().iter().copied(), handle, &raw_tag_name, parser)
         } else {
             let parent = path[index - 1].get(parser)?.as_tag()?;
             same_tag_position(
                 parent.children().top().iter().copied(),
                 handle,
-                &tag_name,
+                &raw_tag_name,
                 parser,
             )
         };
