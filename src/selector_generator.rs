@@ -490,6 +490,15 @@ fn target_text_candidate(
     parser: &TlParser<'_>,
 ) -> Option<RankedXPathPredicate> {
     let node = target.get(parser)?;
+    let tag = node.as_tag()?;
+
+    // Text is a useful last-resort identity for otherwise attribute-less
+    // content nodes. Do not let it bypass the bounded attribute search for
+    // attribute-heavy elements.
+    if tag.attributes().iter().next().is_some() {
+        return None;
+    }
+
     let text = node_text(node, parser);
     let normalized = text.trim();
     if normalized.is_empty() || normalized.chars().count() > 160 {
