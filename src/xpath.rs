@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use pyo3::exceptions::PyValueError;
@@ -116,6 +116,94 @@ fn evaluate_xpath_sequence_first_element(
     Ok(Some(Element::from_parts(tag, outer_html)))
 }
 
+/// A conservative proof that every candidate in the current Robula-style
+/// grammar also selects another node. Work on the normalized XPath tree so
+/// name collisions, entity decoding and synthetic roots have identical semantics.
+fn robust_xpath_has_ambiguous_witness(
+    documents: &Documents,
+    document_handle: DocumentHandle,
+    target_sequence: &xee_xpath::Sequence,
+    budget: usize,
+) -> bool {
+    let xot = documents.xot();
+    let Some(target) = target_sequence
+        .elements(xot)
+        .ok()
+        .and_then(|mut nodes| nodes.next())
+        .and_then(Result::ok)
+    else {
+        return false;
+    };
+    let Some(root) = documents.document_node(document_handle) else {
+        return false;
+    };
+    let remaining = Cell::new(budget);
+    let same_shape = |left, right| {
+        if remaining.get() == 0 {
+            return false;
+        }
+        remaining.set(remaining.get() - 1);
+        let (Some(left_tag), Some(right_tag)) = (xot.element(left), xot.element(right)) else {
+            return false;
+        };
+        let left_attrs = xot.attributes(left);
+        let right_attrs = xot.attributes(right);
+        left_tag.name() == right_tag.name()
+            && left_attrs.len() == right_attrs.len()
+            && left_attrs
+                .iter()
+                .all(|(name, value)| right_attrs.get(name) == Some(value))
+    };
+    let position = |node| {
+        let name = xot.element(node).unwrap().name();
+        xot.parent(node).and_then(|parent| {
+            xot.children(parent)
+                .filter(|child| xot.element(*child).is_some_and(|tag| tag.name() == name))
+                .position(|child| child == node)
+        })
+    };
+    let ancestors = xot
+        .ancestors(target)
+        .skip(1)
+        .filter(|node| xot.element(*node).is_some())
+        .collect::<Vec<_>>();
+    // This is only a preflight: cap its work and use the existing search if no
+    // witness is found. Truncation can only miss a proof, never accept one.
+    if ancestors.len() > budget {
+        return false;
+    }
+    let target_position = position(target);
+    let target_name = xot.element(target).unwrap().name();
+    for other in xot
+        .descendants(root)
+        .filter(|node| {
+            *node != target
+                && xot
+                    .element(*node)
+                    .is_some_and(|tag| tag.name() == target_name)
+        })
+        .take_while(|_| remaining.get() > 0)
+    {
+        if !same_shape(target, other) || target_position != position(other) {
+            continue;
+        }
+        let mut other_ancestors = xot
+            .ancestors(other)
+            .skip(1)
+            .filter(|node| xot.element(*node).is_some())
+            .take_while(|_| remaining.get() > 0);
+        // Require the target's ancestor shapes as an ordered subsequence.
+        // This stronger condition is cheap and proves ambiguity for ancestor
+        // attributes, attribute pairs, AddLevel and target position predicates.
+        if ancestors.iter().all(|ancestor| {
+            other_ancestors.any(|other_ancestor| same_shape(*ancestor, other_ancestor))
+        }) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Validate node identity without serializing candidate result subtrees.
 pub(crate) fn find_unique_xpath_selector(
     documents: &mut Documents,
@@ -133,6 +221,19 @@ pub(crate) fn find_unique_xpath_selector(
         return Err(PyValueError::new_err(
             "Selector target path must identify exactly one node",
         ));
+    }
+    // Only preflight searches large enough to overflow the compilation cache.
+    // The witness proves all current candidates ambiguous; otherwise search
+    // exactly as before, with the same budgets, ranking and validated fallback.
+    if candidates.len() > XPATH_CACHE_CAPACITY
+        && robust_xpath_has_ambiguous_witness(
+            documents,
+            document_handle,
+            &target_sequence,
+            candidates.len(),
+        )
+    {
+        return Ok(Some(target_path.to_string()));
     }
     for candidate in candidates {
         let sequence = execute_xpath_sequence(documents, document_handle, &candidate)?;
@@ -266,4 +367,79 @@ pub(crate) fn evaluate_fragment_xpath_first_with_fallback(
 pub(crate) struct XPathDocumentState {
     pub(crate) documents: Documents,
     pub(crate) document_handle: DocumentHandle,
+}
+
+#[cfg(test)]
+mod selector_preflight_tests {
+    use super::*;
+    use crate::selector_generator::{
+        generate_absolute_xpath_selector, generate_robust_xpath_candidates,
+    };
+    use crate::tl_dom::{parse_owned_html_unlimited, select_handles_from_dom};
+
+    #[test]
+    fn attribute_heavy_ambiguity_skips_candidate_evaluations() {
+        // The selector benchmark's mirrored branches exhaust the candidate
+        // budget. Prove that no candidate is compiled/evaluated, without a
+        // noisy wall-clock threshold on shared CI hardware.
+        for (depth, attributes) in [(4, 128), (64, 16)] {
+            XPATH_CACHE.with(|cache| {
+                *cache.borrow_mut() = FixedCache::new(XPATH_CACHE_CAPACITY);
+            });
+            let branch = |label: &str| {
+                let mut html = String::new();
+                for level in 0..depth {
+                    html.push_str("<div");
+                    for attr in 0..attributes {
+                        html.push_str(&format!(" data-a{attr}=\"level-{level}-{attr}\""));
+                    }
+                    html.push('>');
+                }
+                html.push_str("<span");
+                for attr in 0..attributes {
+                    html.push_str(&format!(" data-a{attr}=\"leaf-{attr}\""));
+                }
+                html.push_str(&format!(">{label}</span>"));
+                html.push_str(&"</div>".repeat(depth));
+                html
+            };
+            let html = format!("<main>{}{}</main>", branch("decoy"), branch("target"));
+            let owned = parse_owned_html_unlimited(html.clone()).unwrap();
+            let dom = owned.get_ref();
+            let target = select_handles_from_dom(dom, "span").unwrap()[1];
+            let path = generate_absolute_xpath_selector(dom, target).unwrap();
+            let candidates = generate_robust_xpath_candidates(dom, target).unwrap();
+            let (mut documents, handle) = parse_xpath_documents(&html, "test").unwrap();
+            for _ in 0..2 {
+                assert_eq!(
+                    find_unique_xpath_selector(&mut documents, handle, &path, candidates.clone(),)
+                        .unwrap(),
+                    Some(path.clone())
+                );
+                XPATH_CACHE.with(|cache| {
+                    let cache = cache.borrow();
+                    assert!(cache.get(&path).is_some());
+                    for candidate in &candidates {
+                        assert!(cache.get(candidate).is_none(),
+                            "candidate evaluated: depth={depth}, attributes={attributes}, {candidate}");
+                    }
+                });
+            }
+            let target_sequence = execute_xpath_sequence(&mut documents, handle, &path).unwrap();
+            assert!(!robust_xpath_has_ambiguous_witness(
+                &documents,
+                handle,
+                &target_sequence,
+                1
+            ));
+            // Guard the proof against future changes to the candidate grammar.
+            for candidate in candidates {
+                let sequence = execute_xpath_sequence(&mut documents, handle, &candidate).unwrap();
+                assert!(
+                    sequence.elements(documents.xot()).unwrap().count() > 1,
+                    "witness incorrectly pruned a unique candidate: {candidate}"
+                );
+            }
+        }
+    }
 }

@@ -61,13 +61,15 @@ def run(repeats: int) -> list[dict]:
             samples = []
             for _ in range(repeats):
                 start = time.perf_counter_ns()
-                generate(target)
+                repeated_selector = generate(target)
                 samples.append((time.perf_counter_ns() - start) / 1e6)
+                assert repeated_selector == selector, (scenario, kind)
             row = {
                 "scenario": scenario,
                 "kind": kind,
                 "depth": depth,
                 "attributes": attributes,
+                "selector": selector,
                 "cold_ms": cold,
                 "median_ms": statistics.median(samples),
                 "max_ms": max(samples),
