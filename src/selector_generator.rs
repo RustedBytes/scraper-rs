@@ -305,6 +305,21 @@ fn href_path(value: &str) -> Option<String> {
     (!without_query.is_empty()).then(|| without_query.to_string())
 }
 
+fn push_ranked_attribute(
+    out: &mut Vec<RankedXPathPredicate>,
+    score: u16,
+    name: &str,
+    value: &str,
+) {
+    if value.is_empty() || !valid_attr_name(name) || xml_safe_name(name) != name {
+        return;
+    }
+    out.push(RankedXPathPredicate {
+        score,
+        predicate: format!("@{name}={}", xpath_literal(value)),
+    });
+}
+
 fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<RankedXPathPredicate> {
     let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) else {
         return Vec::new();
@@ -312,16 +327,6 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
     let attrs = attrs_to_map(tag);
     let tag_name = bytes_to_string(tag.name()).to_ascii_lowercase();
     let mut out = Vec::new();
-
-    let mut push = |score: u16, name: &str, value: &str| {
-        if value.is_empty() || !valid_attr_name(name) || xml_safe_name(name) != name {
-            return;
-        }
-        out.push(RankedXPathPredicate {
-            score,
-            predicate: format!("@{name}={}", xpath_literal(value)),
-        });
-    };
 
     // Structural/content semantics used by scraping sites tend to survive layout
     // churn better than test hooks, generated IDs, or presentation classes.
@@ -342,17 +347,18 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
         .collect::<Vec<_>>();
     data_attrs.sort_by(|left, right| left.0.cmp(right.0));
     for (name, value) in data_attrs {
-        push(100, name, value);
+        push_ranked_attribute(&mut out, 100, name, value);
     }
 
     for name in ["itemprop", "name", "aria-label", "role"] {
         if let Some(value) = attrs.get(name) {
-            push(95, name, value);
+            push_ranked_attribute(&mut out, 95, name, value);
         }
     }
 
     if let Some(value) = attrs.get("id").filter(|value| !value.is_empty()) {
-        push(
+        push_ranked_attribute(
+            &mut out,
             if looks_generated_identifier(value) { 25 } else { 92 },
             "id",
             value,
@@ -363,7 +369,7 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
     // semantic ancestor can win when both uniquely identify the target.
     for name in ["data-testid", "data-test", "data-qa"] {
         if let Some(value) = attrs.get(name) {
-            push(90, name, value);
+            push_ranked_attribute(&mut out, 90, name, value);
         }
     }
 
@@ -380,7 +386,7 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
                     ),
                 });
             }
-            push(80, "href", value);
+            push_ranked_attribute(&mut out, 80, "href", value);
         }
     }
 
@@ -398,13 +404,13 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
                     ),
                 });
             }
-            push(70, "src", value);
+            push_ranked_attribute(&mut out, 70, "src", value);
         }
     }
 
     for name in ["title", "alt"] {
         if let Some(value) = attrs.get(name) {
-            push(60, name, value);
+            push_ranked_attribute(&mut out, 60, name, value);
         }
     }
 
@@ -453,7 +459,7 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
         {
             continue;
         }
-        push(65, &name, &value);
+        push_ranked_attribute(&mut out, 65, &name, &value);
     }
 
     out.sort_by(|left, right| right.score.cmp(&left.score));
