@@ -65,3 +65,43 @@ def test_closed_document_generation():
     doc.close()
     assert doc.generate_css_selector(target) is None
     assert doc.generate_xpath_selector(target) is None
+
+
+@pytest.mark.parametrize("depth,attributes", [(4, 128), (64, 16)])
+def test_xpath_attribute_heavy_absolute_fallback(depth, attributes):
+    from benchmarks.bench_selectors import fixture
+
+    doc = Document(fixture(depth, attributes))
+    target = doc.select("span")[1]
+    selector = assert_target(doc, target)
+    assert selector.startswith("/") and not selector.startswith("//")
+    # Repeated generation must keep selecting the same target after exhaustion.
+    assert doc.generate_xpath_selector(target) == selector
+
+
+@pytest.mark.parametrize("attributes", [0, 128])
+def test_xpath_ancestor_anchor_survives_wrappers_and_sibling_insertion(attributes):
+    padding = " ".join(f'data-a{a}="same-{a}"' for a in range(attributes))
+    doc = Document(
+        f'<main><section data-testid="chosen"><div><span {padding} title="same">target</span>'
+        f'</div></section><section><div><span {padding} title="same">decoy</span>'
+        "</div></section></main>"
+    )
+    selector = assert_target(doc, doc.select("span")[0])
+    assert "data-testid" in selector
+    mutated = Document(
+        '<main><section><div><span title="same">decoy</span></div></section>'
+        '<span title="same">inserted</span><section data-testid="chosen">'
+        '<article><div><span title="same">target</span></div></article>'
+        "</section></main>"
+    )
+    matches = mutated.xpath(selector)
+    assert len(matches) == 1 and matches[0].text == "target"
+
+
+def test_xpath_ambiguous_witness_must_have_same_sibling_position():
+    doc = Document(
+        '<main><div><span title="same">decoy</span>'
+        '<span title="same">target</span></div></main>'
+    )
+    assert assert_target(doc, doc.select("span")[1]) == "//span[2]"
