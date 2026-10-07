@@ -1,15 +1,16 @@
 name: Benchmark
 
 on:
-  pull_request:
-  push:
-    branches: [master]
   workflow_dispatch:
     inputs:
       python-version:
         description: Python version to use for benchmarks
         required: false
         default: "3.12"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   benchmark:
@@ -47,9 +48,7 @@ jobs:
       - name: Run benchmarks
         run: |
           source .venv/bin/activate
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            PYO3_PYTHON="$PWD/.venv/bin/python" cargo bench --locked
-          fi
+          PYO3_PYTHON="$PWD/.venv/bin/python" cargo bench --locked
           python benchmarks/bench_selectors.py --output benchmarks/selectors.json
 
       - name: Upload benchmark results
