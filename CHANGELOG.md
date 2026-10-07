@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-10-07
+
+### Changed
+
+- Improved XPath selector ranking with semantic attributes and ancestor anchors,
+  normalized link/media paths, and lower priority for generated IDs and classes;
+  added normalized-text fallback for attribute-less targets
+  ([#64](https://github.com/RustedBytes/scraper-rs/pull/64)).
+- Limited automatic tests to relevant changes in non-draft PRs using four Python
+  interpreters, canceled superseded runs, and made benchmarks and the full test
+  matrix available through manual runs
+  ([#65](https://github.com/RustedBytes/scraper-rs/pull/65)).
+
+### Fixed
+
+- Filled missing changelog entries for versions 0.13.0 through 0.15.0
+  ([#63](https://github.com/RustedBytes/scraper-rs/pull/63)).
+
 ## [0.15.0] - 2026-10-07
 
 ### Changed
@@ -53,6 +71,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   it is available in a published PyO3 release.
 - Updated package metadata and build documentation to advertise PyPy support.
 
+[0.16.0]: https://github.com/RustedBytes/scraper-rs/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/RustedBytes/scraper-rs/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/RustedBytes/scraper-rs/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/RustedBytes/scraper-rs/compare/v0.12.0...v0.13.0
