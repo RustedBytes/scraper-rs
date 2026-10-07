@@ -465,8 +465,10 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
     out.sort_by(|left, right| right.score.cmp(&left.score));
     out.truncate(XPATH_ATTRIBUTE_BUDGET);
 
-    // Bounded pair predicates retain the Robula+ attribute-set behavior.
-    let singles_len = out.len().min(6);
+    // Bounded pair predicates retain the Robula+ attribute-set behavior without
+    // letting attribute-heavy targets crowd semantic ancestor anchors out of
+    // the global candidate budget.
+    let singles_len = out.len().min(4);
     let singles = out
         .iter()
         .take(singles_len)
@@ -572,11 +574,13 @@ pub(crate) fn generate_robust_xpath_candidates(
                 ancestor_candidate.predicate
             );
 
-            add_ranked(base_score, format!("{prefix}//{target_name}"));
+            add_ranked(base_score.saturating_add(1), format!("{prefix}//{target_name}"));
 
-            for target_candidate in target_attrs.iter().take(6) {
+            // Keep cross-products intentionally small: the ancestor-only form
+            // is the robust candidate we most want to preserve under budget.
+            for target_candidate in target_attrs.iter().take(2) {
                 add_ranked(
-                    base_score.min(target_candidate.score).saturating_add(1),
+                    base_score.min(target_candidate.score),
                     format!(
                         "{prefix}//{target_name}[{}]",
                         target_candidate.predicate
