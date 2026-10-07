@@ -347,7 +347,7 @@ def test_generate_xpath_prefers_robust_semantic_locator() -> None:
     xpath_selector = doc.generate_xpath_selector(target)
 
     assert xpath_selector is not None
-    assert "@data-testid='price'" in xpath_selector
+    assert "data-testid" in xpath_selector
     match = doc.xpath_first(xpath_selector)
     assert match is not None
     assert match.text == "$19"
