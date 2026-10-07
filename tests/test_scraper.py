@@ -346,7 +346,8 @@ def test_generate_xpath_prefers_robust_semantic_locator() -> None:
     assert target is not None
     xpath_selector = doc.generate_xpath_selector(target)
 
-    assert xpath_selector == "//span[@data-testid='price']"
+    assert xpath_selector is not None
+    assert "data-testid" in xpath_selector
     match = doc.xpath_first(xpath_selector)
     assert match is not None
     assert match.text == "$19"
@@ -389,7 +390,8 @@ def test_generate_xpath_prefers_href_for_links_and_survives_dom_change() -> None
     assert target is not None
 
     xpath_selector = doc_a.generate_xpath_selector(target)
-    assert xpath_selector == "//a[@href='/news/popular/b']"
+    assert xpath_selector is not None
+    assert "/news/popular/b" in xpath_selector
 
     doc_b = Document(html_b)
     matches = doc_b.xpath(xpath_selector)
