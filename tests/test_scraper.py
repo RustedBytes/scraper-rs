@@ -317,7 +317,6 @@ def test_css_alias_and_invalid_selector(sample_html: str) -> None:
         doc.select("div[")
 
 
-
 def test_generate_css_and_xpath_selectors(sample_html: str) -> None:
     doc = Document(sample_html)
     target = doc.select("div[data-id='2'] a")[0]
@@ -446,7 +445,6 @@ def test_selector_generation_rejects_detached_or_foreign_elements() -> None:
     if detached is not None:
         with pytest.raises(ValueError, match="requires an Element returned"):
             first_doc.generate_xpath_selector(detached)
-
 
 
 def test_element_nested_selection(sample_html: str) -> None:

@@ -6,7 +6,9 @@ from scraper_rs import Document
 def generated_xpath(html: str, seed: str, *, text: str | None = None) -> str:
     doc = Document(html)
     matches = doc.select(seed)
-    target = next((el for el in matches if text is None or el.text.strip() == text), None)
+    target = next(
+        (el for el in matches if text is None or el.text.strip() == text), None
+    )
     assert target is not None
     selector = doc.generate_xpath_selector(target)
     assert selector is not None
@@ -91,9 +93,7 @@ def test_generated_id_is_penalized_below_semantic_ancestor() -> None:
       </section>
     </main>
     """
-    selector = generated_xpath(
-        html_a, 'section[data-section="generated-id"] article'
-    )
+    selector = generated_xpath(html_a, 'section[data-section="generated-id"] article')
     assert "article-839271" not in selector
     assert "@data-section='generated-id'" in selector
     assert_survives(html_b, selector, "Generated ID article")
@@ -138,9 +138,7 @@ def test_far_semantic_ancestor_beats_near_presentation_class() -> None:
       <span>Decoy</span>
     </main>
     """
-    selector = generated_xpath(
-        html_a, 'section[data-testid="ancestor-stable"] span'
-    )
+    selector = generated_xpath(html_a, 'section[data-testid="ancestor-stable"] span')
     assert "@data-testid='ancestor-stable'" in selector
     assert "content-cell" not in selector
     assert_survives(html_b, selector, "Target")
@@ -165,9 +163,7 @@ def test_semantic_ancestor_beats_class_hash_churn() -> None:
       </section>
     </main>
     """
-    selector = generated_xpath(
-        html_a, 'section[data-section="class-hash"] span'
-    )
+    selector = generated_xpath(html_a, 'section[data-section="class-hash"] span')
     assert "@data-section='class-hash'" in selector
     assert "css-module" not in selector
     assert_survives(html_b, selector, "Hashed class target")

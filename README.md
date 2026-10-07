@@ -36,8 +36,10 @@ print(items[0].to_dict())  # {"tag": "div", "text": "First", "html": "<a...>", .
 
 first_link = doc.select_first("a[href]")  # alias: doc.find(...)
 print(first_link.text, first_link.attr("href"))  # First /a
-print(doc.generate_css_selector(first_link))    # e.g. a[href="/a"]
-print(doc.generate_xpath_selector(first_link))  # Robula+-style XPath, with positional fallback
+print(doc.generate_css_selector(first_link))  # e.g. a[href="/a"]
+print(
+    doc.generate_xpath_selector(first_link)
+)  # Robula+-style XPath, with positional fallback
 links_within_first_item = items[0].select("a[href]")
 print([link.attr("href") for link in links_within_first_item])  # ["/a"]
 
