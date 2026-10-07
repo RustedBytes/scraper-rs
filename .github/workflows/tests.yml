@@ -2,25 +2,46 @@ name: Tests
 
 on:
   pull_request:
-  push:
     branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/**'
+      - 'scraper_rs/**'
+      - 'tests/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'build.rs'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'py.typed'
+      - '.cargo/**'
+      - 'rust-toolchain*'
+      - '.github/workflows/tests.yml'
   workflow_dispatch:
     inputs:
       python-version:
-        description: Python version to use for tests
+        description: Python version to test (empty runs the full compatibility matrix)
         required: false
         default: ""
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   tests:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         # PyO3 0.29 supports free-threaded CPython starting with 3.14.
-        python-version: ${{ fromJSON(github.event.inputs.python-version != '' && format('["{0}"]', github.event.inputs.python-version) || '["3.10","3.11","3.12","3.13","3.14","3.14t","pypy3.11-v8.0.0","pypy3.12-v8.0.0"]') }}
+        # PRs cover the oldest CPython, Rust unit-test interpreter,
+        # free-threaded CPython and newest supported PyPy.
+        # Manual runs retain the full compatibility matrix or a chosen version.
+        python-version: ${{ fromJSON(inputs.python-version != '' && format('["{0}"]', inputs.python-version) || (github.event_name == 'workflow_dispatch' && '["3.10","3.11","3.12","3.13","3.14","3.14t","pypy3.11-v8.0.0","pypy3.12-v8.0.0"]' || '["3.10","3.13","3.14t","pypy3.12-v8.0.0"]')) }}
 
     steps:
       - name: Checkout repository
