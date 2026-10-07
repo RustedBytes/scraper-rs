@@ -11,7 +11,7 @@ bench = false
 
 [features]
 default = ["abi3"]
-abi3 = ["pyo3/abi3-py310"]
+abi3 = ["pyo3/abi3-py310", "pyo3/abi3t-py315"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
