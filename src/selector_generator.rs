@@ -495,7 +495,7 @@ fn target_text_candidate(
     // Text is a useful last-resort identity for otherwise attribute-less
     // content nodes. Do not let it bypass the bounded attribute search for
     // attribute-heavy elements.
-    if tag.attributes().iter().next().is_some() {
+    if !attrs_to_map(tag).is_empty() {
         return None;
     }
 
