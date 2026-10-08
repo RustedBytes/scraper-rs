@@ -293,7 +293,10 @@ fn stable_class_tokens(value: &str) -> Vec<&str> {
 
 fn href_path(value: &str) -> Option<String> {
     let without_fragment = value.split('#').next().unwrap_or(value);
-    let without_query = without_fragment.split('?').next().unwrap_or(without_fragment);
+    let without_query = without_fragment
+        .split('?')
+        .next()
+        .unwrap_or(without_fragment);
 
     if let Some(scheme_index) = without_query.find("://") {
         let after_scheme = &without_query[(scheme_index + 3)..];
@@ -305,12 +308,7 @@ fn href_path(value: &str) -> Option<String> {
     (!without_query.is_empty()).then(|| without_query.to_string())
 }
 
-fn push_ranked_attribute(
-    out: &mut Vec<RankedXPathPredicate>,
-    score: u16,
-    name: &str,
-    value: &str,
-) {
+fn push_ranked_attribute(out: &mut Vec<RankedXPathPredicate>, score: u16, name: &str, value: &str) {
     if value.is_empty() || !valid_attr_name(name) || xml_safe_name(name) != name {
         return;
     }
@@ -320,7 +318,10 @@ fn push_ranked_attribute(
     });
 }
 
-fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<RankedXPathPredicate> {
+fn xpath_attribute_candidates(
+    handle: NodeHandle,
+    parser: &TlParser<'_>,
+) -> Vec<RankedXPathPredicate> {
     let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) else {
         return Vec::new();
     };
@@ -335,10 +336,7 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
         .filter(|(name, value)| {
             name.starts_with("data-")
                 && !value.is_empty()
-                && !matches!(
-                    name.as_str(),
-                    "data-testid" | "data-test" | "data-qa"
-                )
+                && !matches!(name.as_str(), "data-testid" | "data-test" | "data-qa")
                 && !name.contains("render")
                 && !name.contains("random")
                 && !name.contains("build")
@@ -359,7 +357,11 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
     if let Some(value) = attrs.get("id").filter(|value| !value.is_empty()) {
         push_ranked_attribute(
             &mut out,
-            if looks_generated_identifier(value) { 25 } else { 92 },
+            if looks_generated_identifier(value) {
+                25
+            } else {
+                92
+            },
             "id",
             value,
         );
@@ -373,39 +375,38 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
         }
     }
 
-    if matches!(tag_name.as_str(), "a" | "area") {
-        if let Some(value) = attrs.get("href").filter(|value| !value.is_empty()) {
-            if let Some(path) = href_path(value) {
-                // Path-based match survives query-parameter churn and
-                // relative -> absolute URL changes.
-                out.push(RankedXPathPredicate {
-                    score: 96,
-                    predicate: format!(
-                        "ends-with(substring-before(concat(@href, '?'), '?'), {})",
-                        xpath_literal(&path)
-                    ),
-                });
-            }
-            push_ranked_attribute(&mut out, 80, "href", value);
+    if matches!(tag_name.as_str(), "a" | "area")
+        && let Some(value) = attrs.get("href").filter(|value| !value.is_empty())
+    {
+        if let Some(path) = href_path(value) {
+            // Path-based match survives query-parameter churn and
+            // relative -> absolute URL changes.
+            out.push(RankedXPathPredicate {
+                score: 96,
+                predicate: format!(
+                    "ends-with(substring-before(concat(@href, '?'), '?'), {})",
+                    xpath_literal(&path)
+                ),
+            });
         }
+        push_ranked_attribute(&mut out, 80, "href", value);
     }
 
     if matches!(
         tag_name.as_str(),
         "img" | "source" | "video" | "audio" | "iframe" | "script"
-    ) {
-        if let Some(value) = attrs.get("src").filter(|value| !value.is_empty()) {
-            if let Some(path) = href_path(value) {
-                out.push(RankedXPathPredicate {
-                    score: 85,
-                    predicate: format!(
-                        "ends-with(substring-before(concat(@src, '?'), '?'), {})",
-                        xpath_literal(&path)
-                    ),
-                });
-            }
-            push_ranked_attribute(&mut out, 70, "src", value);
+    ) && let Some(value) = attrs.get("src").filter(|value| !value.is_empty())
+    {
+        if let Some(path) = href_path(value) {
+            out.push(RankedXPathPredicate {
+                score: 85,
+                predicate: format!(
+                    "ends-with(substring-before(concat(@src, '?'), '?'), {})",
+                    xpath_literal(&path)
+                ),
+            });
         }
+        push_ranked_attribute(&mut out, 70, "src", value);
     }
 
     for name in ["title", "alt"] {
@@ -462,7 +463,7 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
         push_ranked_attribute(&mut out, 65, &name, &value);
     }
 
-    out.sort_by(|left, right| right.score.cmp(&left.score));
+    out.sort_by_key(|candidate| std::cmp::Reverse(candidate.score));
     out.truncate(XPATH_ATTRIBUTE_BUDGET);
 
     // Bounded pair predicates retain the Robula+ attribute-set behavior without
@@ -483,7 +484,7 @@ fn xpath_attribute_candidates(handle: NodeHandle, parser: &TlParser<'_>) -> Vec<
         }
     }
 
-    out.sort_by(|left, right| right.score.cmp(&left.score));
+    out.sort_by_key(|candidate| std::cmp::Reverse(candidate.score));
     out
 }
 
@@ -512,7 +513,6 @@ fn target_text_candidate(
         predicate: format!("normalize-space(.)={}", xpath_literal(normalized)),
     })
 }
-
 
 fn push_xpath_unique(out: &mut Vec<String>, seen: &mut HashSet<String>, value: String) {
     if out.len() < XPATH_CANDIDATE_BUDGET {
@@ -555,13 +555,7 @@ pub(crate) fn generate_robust_xpath_candidates(
     // Build ancestor anchors globally, then let semantic stability outrank
     // proximity. This prevents a nearby presentation class from beating a
     // farther stable data-section/data-zone anchor.
-    for (distance, ancestor) in path
-        .iter()
-        .rev()
-        .skip(1)
-        .copied()
-        .enumerate()
-    {
+    for (distance, ancestor) in path.iter().rev().skip(1).copied().enumerate() {
         let ancestor_tag = ancestor.get(parser)?.as_tag()?;
         let ancestor_name = xml_safe_name(&bytes_to_string(ancestor_tag.name()));
         let ancestor_attrs = xpath_attribute_candidates(ancestor, parser);
@@ -569,22 +563,19 @@ pub(crate) fn generate_robust_xpath_candidates(
 
         for ancestor_candidate in ancestor_attrs.iter().take(XPATH_ATTRIBUTE_BUDGET) {
             let base_score = ancestor_candidate.score.saturating_sub(distance_penalty);
-            let prefix = format!(
-                "//{ancestor_name}[{}]",
-                ancestor_candidate.predicate
-            );
+            let prefix = format!("//{ancestor_name}[{}]", ancestor_candidate.predicate);
 
-            add_ranked(base_score.saturating_add(1), format!("{prefix}//{target_name}"));
+            add_ranked(
+                base_score.saturating_add(1),
+                format!("{prefix}//{target_name}"),
+            );
 
             // Keep cross-products intentionally small: the ancestor-only form
             // is the robust candidate we most want to preserve under budget.
             for target_candidate in target_attrs.iter().take(2) {
                 add_ranked(
                     base_score.min(target_candidate.score),
-                    format!(
-                        "{prefix}//{target_name}[{}]",
-                        target_candidate.predicate
-                    ),
+                    format!("{prefix}//{target_name}[{}]", target_candidate.predicate),
                 );
             }
         }
@@ -612,12 +603,7 @@ pub(crate) fn generate_robust_xpath_candidates(
     };
     add_ranked(5, format!("//{target_name}[{target_position}]"));
 
-    ranked.sort_by(|left, right| {
-        right
-            .0
-            .cmp(&left.0)
-            .then_with(|| left.1.cmp(&right.1))
-    });
+    ranked.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
 
     let mut out = Vec::new();
     let mut seen = HashSet::new();
