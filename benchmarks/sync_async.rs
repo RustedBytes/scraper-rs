@@ -14,7 +14,7 @@ fn bench_sync_async(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("sync_async");
     for (name, html) in documents {
-        group.throughput(criterion::Throughput::Bytes(html.len() as u64));
+        group.throughput(criterion::Throughput::Elements(1));
 
         group.bench_with_input(BenchmarkId::new("sync_select", name), &html, |b, html| {
             b.iter_batched(

@@ -12,11 +12,17 @@ Run one benchmark target:
 
 ```shell
 cargo bench --bench sync_async
-cargo bench --bench parser_comparison
+cargo bench --bench boundaries
+cargo bench --bench allocations
 cargo bench --bench parse_scaling
 ```
 
-Criterion writes HTML reports under `target/criterion/`.
+Criterion writes raw reports under `target/criterion/`. HTML reports require
+the optional `criterion/html_reports` feature.
+
+See [measurement boundaries and reproduction](../docs/benchmark-methodology.md)
+for separate DOM, CSS, scheduling, allocation and Python-wrapper measurements,
+and balanced version comparisons.
 
 ## Benchmark Targets
 
@@ -38,7 +44,7 @@ Inputs are small, medium, and large deterministic HTML documents.
 
 ### parse_scaling.rs
 
-Measures parse throughput across progressively larger deterministic HTML inputs:
+Measures Document construction and destruction across progressively larger deterministic HTML inputs:
 
 - 2 KiB
 - 8 KiB
@@ -50,7 +56,8 @@ Measures parse throughput across progressively larger deterministic HTML inputs:
 
 ## Interpreting Results
 
-- Use `sync_async` to estimate scheduling cost when work is routed through a blocking async task. 
+- `sync_async` retains legacy combined boundaries; its async cases include
+  parsing and selection as well as scheduling. Use `boundaries` for dispatch controls.
 - Use `parse_scaling` to watch parser throughput as input size grows.
 
 ### bench_selectors.py

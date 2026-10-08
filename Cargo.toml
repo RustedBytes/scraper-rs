@@ -54,3 +54,13 @@ codegen-units = 1
 opt-level = 3
 panic = "abort"
 strip = true
+
+[[bench]]
+name = "boundaries"
+path = "benchmarks/boundaries.rs"
+harness = false
+
+[[bench]]
+name = "allocations"
+path = "benchmarks/allocations.rs"
+harness = false

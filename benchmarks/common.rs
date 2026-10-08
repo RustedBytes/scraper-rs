@@ -120,3 +120,19 @@ fn html_with_items(title: &str, count: usize, include_description: bool) -> Stri
 "#
     )
 }
+
+pub fn selection_fixtures() -> [(&'static str, String, usize); 3] {
+    [
+        ("small", small_html(), 2),
+        ("medium", medium_html(), 100),
+        ("large", large_html(), 1_000),
+    ]
+}
+
+pub fn validate_fixture(html: &str, expected: usize) {
+    let dom = tl::parse(html, Default::default()).unwrap();
+    assert_eq!(dom.query_selector(CSS_ITEM).unwrap().count(), expected);
+    let doc = scraper_rs::Document::new(html, None, false).unwrap();
+    assert_eq!(doc.select(CSS_ITEM).unwrap().len(), expected);
+    assert!(doc.select_first(CSS_ITEM).unwrap().is_some());
+}
