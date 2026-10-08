@@ -22,7 +22,7 @@ rayon = "1"
 tokio = { version = "1", features = ["rt", "macros", "sync"] }
 
 xee-xpath = "0.1.5"
-rustedbytes-tl = { version = "0.2.0", features = ["std"] }
+rustedbytes-tl = { version = "0.3.0", features = ["std"] }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["async_tokio"] }
